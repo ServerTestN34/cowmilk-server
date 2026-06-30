@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>CowMilk's Server Clone</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <div class="discord-app">
+    <div class="discord-app" id="appContainer">
         
+        <!-- Background Dark Mask Layer for Closing Side Drawers -->
+        <div class="mobile-overlay" id="menuOverlay"></div>
+
         <!-- COLUMN 1: Far Left Server Sidebar -->
         <div class="servers-sidebar">
             <div class="server-icon home-icon">🤖</div>
@@ -54,10 +57,11 @@
             
             <header class="channel-header">
                 <div class="header-left">
-                    <span class="hashtag">#</span> welcome-and-rules
+                    <button class="mobile-menu-btn" id="menuToggleBtn">☰</button>
+                    <span class="hashtag">#</span> <span id="headerChannelName">welcome-and-rules</span>
                 </div>
                 <div class="header-right">
-                    📌 🔔 👥 <input type="text" placeholder="Search" class="search-bar">
+                     👥 <input type="text" placeholder="Search" class="search-bar" style="max-width: 90px; font-size:12px;">
                 </div>
             </header>
 
@@ -71,8 +75,8 @@
                     <div class="chat-input-container">
                         <div class="chat-input-wrapper">
                             <button class="attach-btn">+</button>
-                            <input type="text" placeholder="Message #welcome-and-rules">
-                            <div class="input-icons">🎁 🖼️ 😀</div>
+                            <input type="text" id="messageInputField" placeholder="Message #welcome-and-rules">
+                            <div class="input-icons">😀</div>
                         </div>
                     </div>
                 </div>

@@ -14,9 +14,23 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // 3. UI DOM ELEMENTS
     const channels = document.querySelectorAll(".channel");
-    const channelHeaderTitle = document.querySelector(".channel-header .header-left");
-    const chatInput = document.querySelector(".chat-input-wrapper input");
+    const channelHeaderTitle = document.getElementById("headerChannelName");
+    const chatInput = document.getElementById("messageInputField");
     const chatMessagesContainer = document.querySelector(".chat-messages");
+    
+    // Mobile Element SELECTORS 
+    const appContainer = document.getElementById("appContainer");
+    const menuToggleBtn = document.getElementById("menuToggleBtn");
+    const menuOverlay = document.getElementById("menuOverlay");
+
+    // --- MOBILE SCREEN NAVIGATION TOGGLES ---
+    menuToggleBtn.addEventListener("click", () => {
+        appContainer.classList.add("menu-open");
+    });
+
+    menuOverlay.addEventListener("click", () => {
+        appContainer.classList.remove("menu-open");
+    });
 
     // --- FUNCTION: RENDER CHAT WINDOW ---
     function renderMessages(channelKey, messagesSnapshot) {
@@ -63,12 +77,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentLiveListener = null;
 
     function syncChannelMessages(channelKey) {
-        // Disconnect old database stream listener if active
         if (currentLiveListener) {
             database.ref(`channels/${currentChannel}`).off();
         }
 
-        // Setup real-time pipeline to Firebase
         currentLiveListener = database.ref(`channels/${channelKey}`).on('value', (snapshot) => {
             renderMessages(channelKey, snapshot);
         });
@@ -83,8 +95,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const channelName = channel.textContent.replace('# ', '').trim();
             currentChannel = channelName;
             
-            channelHeaderTitle.innerHTML = `<span class="hashtag">#</span> ${channelName}`;
+            channelHeaderTitle.textContent = channelName;
             chatInput.placeholder = `Message #${channelName}`;
+
+            // Close side drawers on selection if on mobile display modes
+            appContainer.classList.remove("menu-open");
 
             // Pull live channel stream
             syncChannelMessages(currentChannel);
@@ -123,7 +138,6 @@ document.addEventListener("DOMContentLoaded", () => {
             
             let aiReply = "";
 
-            // Evaluate Math Strings
             const mathExpression = cleanPrompt.replace(/[^0-9+\-*/().\s]/g, '');
             if (mathExpression && /^[\d\s+\-*/()]+$/.test(mathExpression)) {
                 try {
@@ -133,7 +147,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     aiReply = "I tried parsing that math equation, but the formatting seems off!";
                 }
             } 
-            // Context Filters
             else if (cleanPrompt.includes("apple")) {
                 aiReply = "🍎 Apples are typically **red**, **green**, or **yellow**! Green ones tend to be sour.";
             } else if (cleanPrompt.includes("hi") || cleanPrompt.includes("hello") || cleanPrompt.includes("yo")) {
@@ -146,7 +159,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 aiReply = `🤖 I received your transmission: "${userPrompt}". My processing matrix is ready for structured data or math questions!`;
             }
 
-            // Push bot answer to cloud database
             database.ref("channels/ai-bot-test").push({
                 username: "🤖 Clyde-AI",
                 time: `Today at ${timeString}`,
@@ -156,13 +168,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 700);
     }
 
-    // HTML XSS Protection Sanitizer
     function escapeHTML(str) {
         return str.replace(/[&<>'"]/g, 
             tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
         );
     }
 
-    // Startup Initialization
     syncChannelMessages(currentChannel);
 });
