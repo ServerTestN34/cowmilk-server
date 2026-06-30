@@ -1,38 +1,28 @@
 document.addEventListener("DOMContentLoaded", () => {
     
-    // 1. DATA STORAGE
-    const channelData = {
-        "welcome-and-rules": [
-            { username: "Cowmilk", time: "6/27/26, 3:31 PM", text: "hi", type: "text" },
-            { username: "Cowmilk", time: "6/30/26, 3:17 PM", text: "https://picsum.photos/500/340?random=1", type: "meme" }
-        ],
-        "announcements": [
-            { username: "Cowmilk", time: "Today at 12:05 PM", text: "📢 Server rules update: Keep the memes spicy but respectful.", type: "text" }
-        ],
-        "resources": [
-            { username: "Cowmilk", time: "Yesterday at 4:12 PM", text: "Check out our GitHub repository link here later!", type: "text" }
-        ],
-        "memes": [
-            { username: "Cowmilk", time: "Today at 1:40 PM", text: "Post your brain rot animations here.", type: "text" }
-        ],
-        "general-chat": [
-            { username: "Cowmilk", time: "Today at 2:00 PM", text: "yo what's up everyone", type: "text" }
-        ],
-        "ai-bot-test": [
-            { username: "🤖 Clyde-AI", time: "System", text: "Hello! I am your local test bot. Ask me a math problem (like 2+2), ask me about colors, or say hello!", type: "text" }
-        ]
+    // 1. FIREBASE CONFIGURATION (Using your actual link)
+    const firebaseConfig = {
+        databaseURL: "https://cowmilk-chat-default-rtdb.firebaseio.com"
     };
+    
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
 
+    // 2. APP STATE
     let currentChannel = "welcome-and-rules";
 
+    // 3. UI DOM ELEMENTS
     const channels = document.querySelectorAll(".channel");
     const channelHeaderTitle = document.querySelector(".channel-header .header-left");
     const chatInput = document.querySelector(".chat-input-wrapper input");
     const chatMessagesContainer = document.querySelector(".chat-messages");
 
-    function renderMessages(channelKey) {
+    // --- FUNCTION: RENDER CHAT WINDOW ---
+    function renderMessages(channelKey, messagesSnapshot) {
         chatMessagesContainer.innerHTML = "";
 
+        // Welcome Splash Header
         const splash = document.createElement("div");
         splash.classList.add("welcome-splash");
         splash.innerHTML = `
@@ -42,14 +32,15 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
         chatMessagesContainer.appendChild(splash);
 
-        const messages = channelData[channelKey] || [];
-        messages.forEach(msg => {
-            const msgElement = document.createElement("div");
-            msgElement.classList.add("message");
+        // Loop through and build database messages
+        if (messagesSnapshot) {
+            messagesSnapshot.forEach(childSnapshot => {
+                const msg = childSnapshot.val();
+                const msgElement = document.createElement("div");
+                msgElement.classList.add("message");
 
-            const avatarColor = msg.username.includes("🤖") ? "#9b59b6" : "#3ba55d";
+                const avatarColor = msg.username.includes("🤖") ? "#9b59b6" : "#3ba55d";
 
-            if (msg.type === "text") {
                 msgElement.innerHTML = `
                     <div class="message-avatar" style="background-color: ${avatarColor} !important;"></div>
                     <div class="message-content">
@@ -60,27 +51,30 @@ document.addEventListener("DOMContentLoaded", () => {
                         <p class="msg-text">${escapeHTML(msg.text)}</p>
                     </div>
                 `;
-            } else if (msg.type === "meme") {
-                msgElement.innerHTML = `
-                    <div class="message-avatar" style="background-color: ${avatarColor} !important;"></div>
-                    <div class="message-content">
-                        <div class="message-meta">
-                            <span class="msg-username">${msg.username}</span>
-                            <span class="msg-timestamp">${msg.time}</span>
-                        </div>
-                        <div class="meme-embed">
-                            <img src="${msg.text}" alt="Meme Content">
-                        </div>
-                    </div>
-                `;
-            }
-            chatMessagesContainer.appendChild(msgElement);
-        });
+                chatMessagesContainer.appendChild(msgElement);
+            });
+        }
 
+        // Auto Scroll to Bottom
         chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
     }
 
-    // --- CHANNEL SWITCHING ---
+    // --- FIREBASE SYNC: LISTEN FOR LIVE MESSAGES ---
+    let currentLiveListener = null;
+
+    function syncChannelMessages(channelKey) {
+        // Disconnect old database stream listener if active
+        if (currentLiveListener) {
+            database.ref(`channels/${currentChannel}`).off();
+        }
+
+        // Setup real-time pipeline to Firebase
+        currentLiveListener = database.ref(`channels/${channelKey}`).on('value', (snapshot) => {
+            renderMessages(channelKey, snapshot);
+        });
+    }
+
+    // --- INTERACTIVE: CHANNEL SWITCHING ---
     channels.forEach(channel => {
         channel.addEventListener("click", () => {
             document.querySelector(".channel.active")?.classList.remove("active");
@@ -92,38 +86,35 @@ document.addEventListener("DOMContentLoaded", () => {
             channelHeaderTitle.innerHTML = `<span class="hashtag">#</span> ${channelName}`;
             chatInput.placeholder = `Message #${channelName}`;
 
-            renderMessages(currentChannel);
+            // Pull live channel stream
+            syncChannelMessages(currentChannel);
         });
     });
 
-    // --- SEND MESSAGE & TRIGGER AI LOGIC ---
+    // --- INTERACTIVE: SEND MESSAGE ON ENTER ---
     chatInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && chatInput.value.trim() !== "") {
             const messageText = chatInput.value.trim();
             const now = new Date();
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            if (!channelData[currentChannel]) {
-                channelData[currentChannel] = [];
-            }
-
-            channelData[currentChannel].push({
+            // Push to public cloud database
+            database.ref(`channels/${currentChannel}`).push({
                 username: "Cowmilk",
                 time: `Today at ${timeString}`,
-                text: messageText,
-                type: "text"
+                text: messageText
             });
 
-            renderMessages(currentChannel);
             chatInput.value = "";
 
+            // Bot response trigger if in testing grounds
             if (currentChannel === "ai-bot-test") {
                 triggerSmartBotResponse(messageText);
             }
         }
     });
 
-    // --- NEW FIXED SMART BOT RESPONSE LOGIC ---
+    // --- SMART BOT LOGIC ENGINE ---
     function triggerSmartBotResponse(userPrompt) {
         setTimeout(() => {
             const now = new Date();
@@ -132,18 +123,17 @@ document.addEventListener("DOMContentLoaded", () => {
             
             let aiReply = "";
 
-            // 1. Math Evaluator (Solves 2+2, 5*10, etc.)
+            // Evaluate Math Strings
             const mathExpression = cleanPrompt.replace(/[^0-9+\-*/().\s]/g, '');
             if (mathExpression && /^[\d\s+\-*/()]+$/.test(mathExpression)) {
                 try {
-                    // Evaluates basic math inputs securely
                     const result = Function(`"use strict"; return (${mathExpression})`)();
                     aiReply = `📊 Math analysis complete: **${userPrompt} = ${result}**`;
                 } catch (e) {
                     aiReply = "I tried parsing that math equation, but the formatting seems off!";
                 }
             } 
-            // 2. Contextual Knowledge Engine
+            // Context Filters
             else if (cleanPrompt.includes("apple")) {
                 aiReply = "🍎 Apples are typically **red**, **green**, or **yellow**! Green ones tend to be sour.";
             } else if (cleanPrompt.includes("hi") || cleanPrompt.includes("hello") || cleanPrompt.includes("yo")) {
@@ -153,26 +143,26 @@ document.addEventListener("DOMContentLoaded", () => {
             } else if (cleanPrompt.includes("color")) {
                 aiReply = "🎨 Visual data request: What object's color spectrum are you inquiring about?";
             } else {
-                // Dynamic mirrored response if it doesn't hit a key filter
                 aiReply = `🤖 I received your transmission: "${userPrompt}". My processing matrix is ready for structured data or math questions!`;
             }
 
-            channelData["ai-bot-test"].push({
+            // Push bot answer to cloud database
+            database.ref("channels/ai-bot-test").push({
                 username: "🤖 Clyde-AI",
                 time: `Today at ${timeString}`,
-                text: aiReply,
-                type: "text"
+                text: aiReply
             });
 
-            renderMessages("ai-bot-test");
-        }, 500);
+        }, 700);
     }
 
+    // HTML XSS Protection Sanitizer
     function escapeHTML(str) {
         return str.replace(/[&<>'"]/g, 
             tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
         );
     }
 
-    renderMessages(currentChannel);
+    // Startup Initialization
+    syncChannelMessages(currentChannel);
 });

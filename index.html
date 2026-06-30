@@ -10,6 +10,7 @@
 
     <div class="discord-app">
         
+        <!-- COLUMN 1: Far Left Server Sidebar -->
         <div class="servers-sidebar">
             <div class="server-icon home-icon">🤖</div>
             <div class="separator"></div>
@@ -17,6 +18,7 @@
             <div class="server-icon">+</div>
         </div>
 
+        <!-- COLUMN 2: Channels Sidebar -->
         <div class="channels-sidebar">
             <div class="server-header">
                 <h2>CowMilk's server</h2>
@@ -47,6 +49,7 @@
             </div>
         </div>
 
+        <!-- MAIN WINDOW CONTAINER -->
         <div class="main-window">
             
             <header class="channel-header">
@@ -62,38 +65,7 @@
                 
                 <div class="chat-area">
                     <div class="chat-messages">
-                        
-                        <div class="welcome-splash">
-                            <h1>Welcome to<br>CowMilk's server</h1>
-                            <p>This is the beginning of this server.</p>
-                            <div class="date-divider"><span>June 27, 2026</span></div>
-                        </div>
-
-                        <div class="message">
-                            <div class="message-avatar"></div>
-                            <div class="message-content">
-                                <div class="message-meta">
-                                    <span class="msg-username">Cowmilk</span>
-                                    <span class="msg-timestamp">6/27/26, 3:31 PM</span>
-                                </div>
-                                <p class="msg-text">hi</p>
-                            </div>
-                        </div>
-
-                        <div class="message">
-                            <div class="message-avatar"></div>
-                            <div class="message-content">
-                                <div class="message-meta">
-                                    <span class="msg-username">Cowmilk</span>
-                                    <span class="msg-timestamp">Today at 3:17 PM</span>
-                                </div>
-                                <p class="msg-text">Check out today's meme dump:</p>
-                                <div class="meme-embed">
-                                    <img src="https://picsum.photos/500/340?random=1" alt="Meme Grid">
-                                </div>
-                            </div>
-                        </div>
-
+                        <!-- Messages dynamically load here from Firebase -->
                     </div>
 
                     <div class="chat-input-container">
@@ -105,6 +77,7 @@
                     </div>
                 </div>
 
+                <!-- COLUMN 3: Member List Sidebar -->
                 <div class="members-sidebar">
                     <div class="member-group-title">ONLINE — 1</div>
                     <div class="member-card">
@@ -122,6 +95,11 @@
 
     </div>
 
+    <!-- Firebase App and Realtime Database scripts -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+
+    <!-- Your custom app script -->
     <script src="script.js"></script>
 </body>
 </html>
