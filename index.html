@@ -10,10 +10,8 @@
 
     <div class="discord-app" id="appContainer">
         
-        <!-- Background Dark Mask Layer for Closing Side Drawers -->
         <div class="mobile-overlay" id="menuOverlay"></div>
 
-        <!-- COLUMN 1: Far Left Server Sidebar -->
         <div class="servers-sidebar">
             <div class="server-icon home-icon">🤖</div>
             <div class="separator"></div>
@@ -21,7 +19,6 @@
             <div class="server-icon">+</div>
         </div>
 
-        <!-- COLUMN 2: Channels Sidebar -->
         <div class="channels-sidebar">
             <div class="server-header">
                 <h2>CowMilk's server</h2>
@@ -52,7 +49,6 @@
             </div>
         </div>
 
-        <!-- MAIN WINDOW CONTAINER -->
         <div class="main-window">
             
             <header class="channel-header">
@@ -69,8 +65,7 @@
                 
                 <div class="chat-area">
                     <div class="chat-messages">
-                        <!-- Messages dynamically load here from Firebase -->
-                    </div>
+                        </div>
 
                     <div class="chat-input-container">
                         <div class="chat-input-wrapper">
@@ -81,7 +76,6 @@
                     </div>
                 </div>
 
-                <!-- COLUMN 3: Member List Sidebar -->
                 <div class="members-sidebar">
                     <div class="member-group-title">ONLINE — 1</div>
                     <div class="member-card">
@@ -99,11 +93,9 @@
 
     </div>
 
-    <!-- Firebase App and Realtime Database scripts -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 
-    <!-- Your custom app script -->
     <script src="script.js"></script>
 </body>
 </html>

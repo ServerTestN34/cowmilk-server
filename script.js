@@ -1,42 +1,35 @@
 document.addEventListener("DOMContentLoaded", () => {
     
-    // 1. FIREBASE CONFIGURATION (Using your actual link)
+    // 1. FIREBASE SETUP
     const firebaseConfig = {
         databaseURL: "https://cowmilk-chat-default-rtdb.firebaseio.com"
     };
-    
-    // Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // 2. APP STATE
+    // 2. STATE MANAGEMENT
     let currentChannel = "welcome-and-rules";
+    let currentLiveListener = null;
 
-    // 3. UI DOM ELEMENTS
+    // 3. UI ELEMENT SELECTORS
     const channels = document.querySelectorAll(".channel");
     const channelHeaderTitle = document.getElementById("headerChannelName");
     const chatInput = document.getElementById("messageInputField");
     const chatMessagesContainer = document.querySelector(".chat-messages");
     
-    // Mobile Element SELECTORS 
     const appContainer = document.getElementById("appContainer");
     const menuToggleBtn = document.getElementById("menuToggleBtn");
     const menuOverlay = document.getElementById("menuOverlay");
 
-    // --- MOBILE SCREEN NAVIGATION TOGGLES ---
-    menuToggleBtn.addEventListener("click", () => {
-        appContainer.classList.add("menu-open");
-    });
+    // --- DRAWER LAYOUT TOGGLES ---
+    menuToggleBtn.addEventListener("click", () => appContainer.classList.add("menu-open"));
+    menuOverlay.addEventListener("click", () => appContainer.classList.remove("menu-open"));
 
-    menuOverlay.addEventListener("click", () => {
-        appContainer.classList.remove("menu-open");
-    });
-
-    // --- FUNCTION: RENDER CHAT WINDOW ---
-    function renderMessages(channelKey, messagesSnapshot) {
+    // --- FUNCTION: RENDER CHAT FEED WITH MOD TOOLS ---
+    function renderMessages(channelKey, snapshot) {
         chatMessagesContainer.innerHTML = "";
 
-        // Welcome Splash Header
+        // Header Splash Layout
         const splash = document.createElement("div");
         splash.classList.add("welcome-splash");
         splash.innerHTML = `
@@ -46,47 +39,75 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
         chatMessagesContainer.appendChild(splash);
 
-        // Loop through and build database messages
-        if (messagesSnapshot) {
-            messagesSnapshot.forEach(childSnapshot => {
-                const msg = childSnapshot.val();
-                const msgElement = document.createElement("div");
-                msgElement.classList.add("message");
+        if (!snapshot.exists()) return;
 
-                const avatarColor = msg.username.includes("🤖") ? "#9b59b6" : "#3ba55d";
+        snapshot.forEach(childSnapshot => {
+            const msgId = childSnapshot.key; // Unique Firebase string hash code
+            const msg = childSnapshot.val();
+            
+            const msgElement = document.createElement("div");
+            msgElement.classList.add("message");
+            msgElement.setAttribute("data-id", msgId);
 
-                msgElement.innerHTML = `
-                    <div class="message-avatar" style="background-color: ${avatarColor} !important;"></div>
-                    <div class="message-content">
-                        <div class="message-meta">
-                            <span class="msg-username" style="color: ${msg.username.includes('🤖') ? '#9b59b6' : '#ffffff'}">${msg.username}</span>
-                            <span class="msg-timestamp">${msg.time}</span>
-                        </div>
-                        <p class="msg-text">${escapeHTML(msg.text)}</p>
+            const isBot = msg.username.includes("🤖");
+            const avatarColor = isBot ? "#9b59b6" : "#3ba55d";
+
+            // Tool menu buttons (only render for non-bot messages so users can manage their text blocks)
+            const actionButtonsHTML = !isBot ? `
+                <div class="message-actions">
+                    <button class="action-btn edit-btn">✏️</button>
+                    <button class="action-btn delete-btn">🗑️</button>
+                </div>
+            ` : '';
+
+            msgElement.innerHTML = `
+                <div class="message-avatar" style="background-color: ${avatarColor} !important;"></div>
+                <div class="message-content">
+                    <div class="message-meta">
+                        <span class="msg-username" style="color: ${isBot ? '#9b59b6' : '#ffffff'}">${msg.username}</span>
+                        <span class="msg-timestamp">${msg.time}</span>
                     </div>
-                `;
-                chatMessagesContainer.appendChild(msgElement);
-            });
-        }
+                    <p class="msg-text">${escapeHTML(msg.text)}</p>
+                </div>
+                ${actionButtonsHTML}
+            `;
 
-        // Auto Scroll to Bottom
+            // Attach operational click actions inside the elements
+            if (!isBot) {
+                msgElement.querySelector(".delete-btn").addEventListener("click", () => {
+                    if (confirm("Delete this message permanently?")) {
+                        database.ref(`channels/${currentChannel}/${msgId}`).remove();
+                    }
+                });
+
+                msgElement.querySelector(".edit-btn").addEventListener("click", () => {
+                    const currentText = msg.text;
+                    const newText = prompt("Edit your message:", currentText);
+                    if (newText !== null && newText.trim() !== "") {
+                        database.ref(`channels/${currentChannel}/${msgId}`).update({
+                            text: newText.trim()
+                        });
+                    }
+                });
+            }
+
+            chatMessagesContainer.appendChild(msgElement);
+        });
+
         chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
     }
 
-    // --- FIREBASE SYNC: LISTEN FOR LIVE MESSAGES ---
-    let currentLiveListener = null;
-
+    // --- FIREBASE SYNC CONTROL ---
     function syncChannelMessages(channelKey) {
         if (currentLiveListener) {
             database.ref(`channels/${currentChannel}`).off();
         }
-
         currentLiveListener = database.ref(`channels/${channelKey}`).on('value', (snapshot) => {
             renderMessages(channelKey, snapshot);
         });
     }
 
-    // --- INTERACTIVE: CHANNEL SWITCHING ---
+    // --- INTERACTIVE: CHANNEL SWITCHING WITH AUTO-CLOSE DRAWER ---
     channels.forEach(channel => {
         channel.addEventListener("click", () => {
             document.querySelector(".channel.active")?.classList.remove("active");
@@ -98,22 +119,20 @@ document.addEventListener("DOMContentLoaded", () => {
             channelHeaderTitle.textContent = channelName;
             chatInput.placeholder = `Message #${channelName}`;
 
-            // Close side drawers on selection if on mobile display modes
+            // FIX: Instantly close menu viewports on channel tap
             appContainer.classList.remove("menu-open");
 
-            // Pull live channel stream
             syncChannelMessages(currentChannel);
         });
     });
 
-    // --- INTERACTIVE: SEND MESSAGE ON ENTER ---
+    // --- INTERACTIVE: SEND ENTER MESSAGES ---
     chatInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && chatInput.value.trim() !== "") {
             const messageText = chatInput.value.trim();
             const now = new Date();
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            // Push to public cloud database
             database.ref(`channels/${currentChannel}`).push({
                 username: "Cowmilk",
                 time: `Today at ${timeString}`,
@@ -122,14 +141,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
             chatInput.value = "";
 
-            // Bot response trigger if in testing grounds
             if (currentChannel === "ai-bot-test") {
                 triggerSmartBotResponse(messageText);
             }
         }
     });
 
-    // --- SMART BOT LOGIC ENGINE ---
+    // --- AI COMMAND RESPONSE PARSER ---
     function triggerSmartBotResponse(userPrompt) {
         setTimeout(() => {
             const now = new Date();
