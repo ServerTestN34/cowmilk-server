@@ -12,6 +12,73 @@ body, html {
     background-color: #313338;
 }
 
+/* --- IDENTITY SELECTOR WINDOWS --- */
+.identity-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(30, 31, 34, 0.95);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-card {
+    background-color: #313338;
+    padding: 32px;
+    border-radius: 8px;
+    text-align: center;
+    border: 1px solid #404249;
+    max-width: 400px;
+    width: 90%;
+}
+
+.modal-card h2 {
+    color: #fff;
+    margin-bottom: 8px;
+}
+
+.modal-card p {
+    color: #b5bac1;
+    margin-bottom: 24px;
+    font-size: 14px;
+}
+
+.profile-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.profile-select-btn {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background-color: #2b2d31;
+    padding: 12px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+    color: #fff;
+    font-weight: bold;
+}
+
+.profile-select-btn:hover {
+    border-color: #5865f2;
+    background-color: #35373c;
+}
+
+.sel-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+}
+
+/* --- DISCORD APP MATRIX ENGINE --- */
 .discord-app {
     display: flex;
     height: 100vh;
@@ -20,7 +87,6 @@ body, html {
     position: relative;
 }
 
-/* --- SERVERS SIDEBAR --- */
 .servers-sidebar {
     background-color: #1e1f22;
     width: 72px;
@@ -28,7 +94,6 @@ body, html {
     flex-direction: column;
     align-items: center;
     padding-top: 12px;
-    gap: 8px;
     flex-shrink: 0;
 }
 
@@ -36,28 +101,15 @@ body, html {
     width: 48px;
     height: 48px;
     background-color: #313338;
-    border-radius: 50%;
+    border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 20px;
     cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-.server-icon:hover, .server-icon.active {
-    border-radius: 16px;
     background-color: #5865f2;
 }
 
-.separator {
-    width: 32px;
-    height: 2px;
-    background-color: #35363c;
-    margin: 4px 0;
-}
-
-/* --- CHANNELS SIDEBAR --- */
 .channels-sidebar {
     background-color: #2b2d31;
     width: 240px;
@@ -117,7 +169,6 @@ body, html {
     background-color: #232428;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     padding: 0 8px;
 }
 
@@ -130,7 +181,6 @@ body, html {
 .profile-avatar {
     width: 32px;
     height: 32px;
-    background-color: #5865f2;
     border-radius: 50%;
 }
 
@@ -145,7 +195,6 @@ body, html {
     color: #b5bac1;
 }
 
-/* --- MAIN CONTROLLER WINDOW --- */
 .main-window {
     flex: 1;
     display: flex;
@@ -159,7 +208,6 @@ body, html {
     border-bottom: 1px solid #26272b;
     display: flex;
     align-items: center;
-    justify-content: space-between;
     padding: 0 16px;
     color: #fff;
     font-weight: bold;
@@ -187,7 +235,6 @@ body, html {
     min-height: 0;
 }
 
-/* --- CHAT VIEWPORT FEED --- */
 .chat-area {
     flex: 1;
     display: flex;
@@ -219,7 +266,6 @@ body, html {
 .message-avatar {
     width: 40px;
     height: 40px;
-    background-color: #3ba55d;
     border-radius: 50%;
     flex-shrink: 0;
 }
@@ -244,12 +290,18 @@ body, html {
     color: #949ba4;
 }
 
+.msg-edited-tag {
+    font-size: 10px;
+    color: #949ba4;
+    margin-left: 4px;
+}
+
 .msg-text {
     color: #dbdee1;
     word-break: break-word;
 }
 
-/* --- MESSAGE ACTION UTILS --- */
+/* --- MESSAGE ACTIONS UTILITIES --- */
 .message-actions {
     position: absolute;
     right: 16px;
@@ -285,7 +337,7 @@ body, html {
     background-color: #f23f43;
 }
 
-/* --- MOBILE INPUT FIELD BOX --- */
+/* --- INPUT CONTAINER & EMOJI SYSTEM --- */
 .chat-input-container {
     padding: 0 16px 24px 16px;
 }
@@ -297,6 +349,7 @@ body, html {
     align-items: center;
     padding: 0 16px;
     height: 44px;
+    position: relative;
 }
 
 .chat-input-wrapper input {
@@ -306,22 +359,54 @@ body, html {
     color: #dbdee1;
     flex: 1;
     font-size: 16px;
-    padding: 0 12px;
 }
 
-.attach-btn {
-    background-color: #4e5058;
-    color: #dbdee1;
+.emoji-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.emoji-trigger-btn {
+    background: none;
     border: none;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    font-size: 16px;
-    font-weight: bold;
+    font-size: 20px;
     cursor: pointer;
+    outline: none;
 }
 
-/* --- MEMBERS LIST --- */
+.emoji-picker-tray {
+    position: absolute;
+    bottom: 50px;
+    right: 0;
+    background-color: #2b2d31;
+    border: 1px solid #404249;
+    border-radius: 8px;
+    padding: 12px;
+    display: none;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    width: 200px;
+    z-index: 50;
+}
+
+.emoji-picker-tray.active {
+    display: grid;
+}
+
+.emoji-picker-tray span {
+    font-size: 22px;
+    cursor: pointer;
+    text-align: center;
+    transition: transform 0.1s;
+}
+
+.emoji-picker-tray span:hover {
+    transform: scale(1.2);
+}
+
+/* --- MEMBERS DASHBOARD --- */
 .members-sidebar {
     width: 240px;
     background-color: #2b2d31;
@@ -343,19 +428,24 @@ body, html {
     gap: 12px;
     padding: 6px 8px;
     border-radius: 4px;
+    margin-bottom: 4px;
 }
 
 .member-avatar {
     width: 32px;
     height: 32px;
-    background-color: #faa81a;
     border-radius: 50%;
 }
 
 .member-name {
     font-size: 14px;
-    color: #949ba4;
+    color: #dbdee1;
     font-weight: 500;
+}
+
+.member-game {
+    font-size: 11px;
+    color: #b5bac1;
 }
 
 .mobile-overlay {
@@ -369,7 +459,7 @@ body, html {
     z-index: 5;
 }
 
-/* --- RESPONSIVE BREAKPOINTS --- */
+/* --- RESPONSIVE MEDIA QUERIES --- */
 @media (max-width: 768px) {
     .mobile-menu-btn {
         display: block;
@@ -409,7 +499,6 @@ body, html {
         display: block;
     }
 
-    /* Keep edit menu visible on mobile instead of relying on hover rules */
     .message-actions {
         display: flex;
         top: 4px;

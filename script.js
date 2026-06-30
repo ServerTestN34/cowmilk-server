@@ -7,11 +7,16 @@ document.addEventListener("DOMContentLoaded", () => {
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // 2. STATE MANAGEMENT
+    // 2. ACTIVE SYSTEM USER STATE
+    let currentUser = {
+        username: "Cowmilk",
+        avatar: "#5865f2",
+        status: "🎮 ROBLOX"
+    };
     let currentChannel = "welcome-and-rules";
     let currentLiveListener = null;
 
-    // 3. UI ELEMENT SELECTORS
+    // 3. ELEMENT SELECTORS
     const channels = document.querySelectorAll(".channel");
     const channelHeaderTitle = document.getElementById("headerChannelName");
     const chatInput = document.getElementById("messageInputField");
@@ -21,15 +26,87 @@ document.addEventListener("DOMContentLoaded", () => {
     const menuToggleBtn = document.getElementById("menuToggleBtn");
     const menuOverlay = document.getElementById("menuOverlay");
 
-    // --- DRAWER LAYOUT TOGGLES ---
+    // Profile Modal Elements
+    const identityModal = document.getElementById("identityModal");
+    const profileButtons = document.querySelectorAll(".profile-select-btn");
+    const memberListGrid = document.getElementById("memberListGrid");
+
+    // Emoji Box Selectors
+    const emojiMenuBtn = document.getElementById("emojiMenuBtn");
+    const emojiPickerTray = document.getElementById("emojiPickerTray");
+
+    // --- LOGIC: IDENTITY SELECTOR SYSTEM ---
+    profileButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            currentUser.username = btn.getAttribute("data-user");
+            currentUser.avatar = btn.getAttribute("data-avatar");
+            currentUser.status = btn.getAttribute("data-game");
+
+            // Apply user identity values globally
+            document.getElementById("globalUsername").textContent = currentUser.username;
+            document.getElementById("globalUserStatus").textContent = currentUser.status;
+            document.getElementById("globalUserAvatar").style.backgroundColor = currentUser.avatar;
+
+            // Hide Picker and open server application
+            identityModal.style.display = "none";
+            
+            // Build the right-hand active participant card layout lists
+            renderMemberList();
+            syncChannelMessages(currentChannel);
+        });
+    });
+
+    // --- LOGIC: RENDERING STATIC MEMBER DASHBOARD CARD BLOCKS ---
+    function renderMemberList() {
+        memberListGrid.innerHTML = `
+            <div class="member-card">
+                <div class="member-avatar" style="background-color: #5865f2;"></div>
+                <div>
+                    <div class="member-name">Cowmilk 👑</div>
+                    <div class="member-game">🎮 ROBLOX</div>
+                </div>
+            </div>
+            <div class="member-card">
+                <div class="member-avatar" style="background-color: #e67e22;"></div>
+                <div>
+                    <div class="member-name">Guest Racer</div>
+                    <div class="member-game">🏎️ Mario Kart</div>
+                </div>
+            </div>
+            <div class="member-card">
+                <div class="member-avatar" style="background-color: #9b59b6;"></div>
+                <div>
+                    <div class="member-name">🤖 Clyde-AI</div>
+                    <div class="member-game">⚙️ Core Matrix</div>
+                </div>
+            </div>
+        `;
+    }
+
+    // --- MOBILE ASSIST ACTIONS ---
     menuToggleBtn.addEventListener("click", () => appContainer.classList.add("menu-open"));
     menuOverlay.addEventListener("click", () => appContainer.classList.remove("menu-open"));
 
-    // --- FUNCTION: RENDER CHAT FEED WITH MOD TOOLS ---
+    // --- EMOJI INPUT SELECTION INTERACTIVE HOOKS ---
+    emojiMenuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        emojiPickerTray.classList.toggle("active");
+    });
+
+    document.querySelectorAll(".emoji-picker-tray span").forEach(emojiSpan => {
+        emojiSpan.addEventListener("click", () => {
+            chatInput.value += emojiSpan.textContent; // Insert emoji at end of text string
+            chatInput.focus();
+        });
+    });
+
+    // Hide drawer automatically if anywhere else is clicked
+    document.addEventListener("click", () => emojiPickerTray.classList.remove("active"));
+
+    // --- FIREBASE LOGIC: RENDERING CLOUD DATA BLOCKS ---
     function renderMessages(channelKey, snapshot) {
         chatMessagesContainer.innerHTML = "";
 
-        // Header Splash Layout
         const splash = document.createElement("div");
         splash.classList.add("welcome-splash");
         splash.innerHTML = `
@@ -42,18 +119,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!snapshot.exists()) return;
 
         snapshot.forEach(childSnapshot => {
-            const msgId = childSnapshot.key; // Unique Firebase string hash code
+            const msgId = childSnapshot.key;
             const msg = childSnapshot.val();
             
             const msgElement = document.createElement("div");
             msgElement.classList.add("message");
-            msgElement.setAttribute("data-id", msgId);
 
             const isBot = msg.username.includes("🤖");
-            const avatarColor = isBot ? "#9b59b6" : "#3ba55d";
+            const avatarColor = msg.avatarColor || (isBot ? "#9b59b6" : "#3ba55d");
 
-            // Tool menu buttons (only render for non-bot messages so users can manage their text blocks)
-            const actionButtonsHTML = !isBot ? `
+            // Append (edited) tag if edited configuration flag evaluate true
+            const editedBadgeHTML = msg.edited ? `<span class="msg-edited-tag">(edited)</span>` : '';
+
+            // Only allow the creator of the text to alter their records
+            const actionsHTML = (msg.username === currentUser.username && !isBot) ? `
                 <div class="message-actions">
                     <button class="action-btn edit-btn">✏️</button>
                     <button class="action-btn delete-btn">🗑️</button>
@@ -65,15 +144,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 <div class="message-content">
                     <div class="message-meta">
                         <span class="msg-username" style="color: ${isBot ? '#9b59b6' : '#ffffff'}">${msg.username}</span>
-                        <span class="msg-timestamp">${msg.time}</span>
+                        <span class="msg-timestamp">${msg.time} ${editedBadgeHTML}</span>
                     </div>
                     <p class="msg-text">${escapeHTML(msg.text)}</p>
                 </div>
-                ${actionButtonsHTML}
+                ${actionsHTML}
             `;
 
-            // Attach operational click actions inside the elements
-            if (!isBot) {
+            if (msg.username === currentUser.username && !isBot) {
                 msgElement.querySelector(".delete-btn").addEventListener("click", () => {
                     if (confirm("Delete this message permanently?")) {
                         database.ref(`channels/${currentChannel}/${msgId}`).remove();
@@ -81,11 +159,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
 
                 msgElement.querySelector(".edit-btn").addEventListener("click", () => {
-                    const currentText = msg.text;
-                    const newText = prompt("Edit your message:", currentText);
+                    const newText = prompt("Edit your message:", msg.text);
                     if (newText !== null && newText.trim() !== "") {
                         database.ref(`channels/${currentChannel}/${msgId}`).update({
-                            text: newText.trim()
+                            text: newText.trim(),
+                            edited: true // Set flag to true
                         });
                     }
                 });
@@ -97,7 +175,7 @@ document.addEventListener("DOMContentLoaded", () => {
         chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
     }
 
-    // --- FIREBASE SYNC CONTROL ---
+    // --- PIPELINE MANAGER ---
     function syncChannelMessages(channelKey) {
         if (currentLiveListener) {
             database.ref(`channels/${currentChannel}`).off();
@@ -107,7 +185,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- INTERACTIVE: CHANNEL SWITCHING WITH AUTO-CLOSE DRAWER ---
+    // --- CHANNELS EVENT CONFIGS ---
     channels.forEach(channel => {
         channel.addEventListener("click", () => {
             document.querySelector(".channel.active")?.classList.remove("active");
@@ -119,14 +197,12 @@ document.addEventListener("DOMContentLoaded", () => {
             channelHeaderTitle.textContent = channelName;
             chatInput.placeholder = `Message #${channelName}`;
 
-            // FIX: Instantly close menu viewports on channel tap
             appContainer.classList.remove("menu-open");
-
             syncChannelMessages(currentChannel);
         });
     });
 
-    // --- INTERACTIVE: SEND ENTER MESSAGES ---
+    // --- SEND TRIGGER HOOK ---
     chatInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && chatInput.value.trim() !== "") {
             const messageText = chatInput.value.trim();
@@ -134,9 +210,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             database.ref(`channels/${currentChannel}`).push({
-                username: "Cowmilk",
+                username: currentUser.username,
+                avatarColor: currentUser.avatar,
                 time: `Today at ${timeString}`,
-                text: messageText
+                text: messageText,
+                edited: false
             });
 
             chatInput.value = "";
@@ -147,7 +225,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // --- AI COMMAND RESPONSE PARSER ---
+    // --- BOT CORE LOGIC ---
     function triggerSmartBotResponse(userPrompt) {
         setTimeout(() => {
             const now = new Date();
@@ -168,7 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
             else if (cleanPrompt.includes("apple")) {
                 aiReply = "🍎 Apples are typically **red**, **green**, or **yellow**! Green ones tend to be sour.";
             } else if (cleanPrompt.includes("hi") || cleanPrompt.includes("hello") || cleanPrompt.includes("yo")) {
-                aiReply = "👋 Hello Cowmilk! Ready to run queries. Ask me something or drop some math problems!";
+                aiReply = `👋 Hello ${currentUser.username}! Ready to run queries. Ask me something or drop some math problems!`;
             } else if (cleanPrompt.includes("roblox")) {
                 aiReply = "🎮 Roblox instance detected. Let me know what game loops you're script testing right now!";
             } else if (cleanPrompt.includes("color")) {
@@ -180,7 +258,8 @@ document.addEventListener("DOMContentLoaded", () => {
             database.ref("channels/ai-bot-test").push({
                 username: "🤖 Clyde-AI",
                 time: `Today at ${timeString}`,
-                text: aiReply
+                text: aiReply,
+                edited: false
             });
 
         }, 700);
@@ -191,6 +270,4 @@ document.addEventListener("DOMContentLoaded", () => {
             tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
         );
     }
-
-    syncChannelMessages(currentChannel);
 });

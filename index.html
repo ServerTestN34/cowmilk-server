@@ -8,15 +8,29 @@
 </head>
 <body>
 
+    <div class="identity-modal" id="identityModal">
+        <div class="modal-card">
+            <h2>Select Your Profile</h2>
+            <p>Choose an identity to log into CowMilk's server:</p>
+            <div class="profile-options">
+                <div class="profile-select-btn" data-user="Cowmilk" data-avatar="#5865f2" data-game="🎮 ROBLOX">
+                    <div class="sel-avatar" style="background-color: #5865f2;"></div>
+                    <span>Cowmilk</span>
+                </div>
+                <div class="profile-select-btn" data-user="Guest Racer" data-avatar="#e67e22" data-game="🏎️ Mario Kart">
+                    <div class="sel-avatar" style="background-color: #e67e22;"></div>
+                    <span>Guest Racer</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="discord-app" id="appContainer">
         
         <div class="mobile-overlay" id="menuOverlay"></div>
 
         <div class="servers-sidebar">
-            <div class="server-icon home-icon">🤖</div>
-            <div class="separator"></div>
             <div class="server-icon active">🥛</div>
-            <div class="server-icon">+</div>
         </div>
 
         <div class="channels-sidebar">
@@ -39,13 +53,12 @@
 
             <div class="user-profile-bar">
                 <div class="user-info">
-                    <div class="profile-avatar"></div>
+                    <div class="profile-avatar" id="globalUserAvatar"></div>
                     <div>
-                        <div class="username">Cowmilk</div>
-                        <div class="user-status">🎮 ROBLOX</div>
+                        <div class="username" id="globalUsername">Loading...</div>
+                        <div class="user-status" id="globalUserStatus">Connecting...</div>
                     </div>
                 </div>
-                <div class="profile-controls">🎤 🎧 ⚙️</div>
             </div>
         </div>
 
@@ -55,9 +68,6 @@
                 <div class="header-left">
                     <button class="mobile-menu-btn" id="menuToggleBtn">☰</button>
                     <span class="hashtag">#</span> <span id="headerChannelName">welcome-and-rules</span>
-                </div>
-                <div class="header-right">
-                     👥 <input type="text" placeholder="Search" class="search-bar" style="max-width: 90px; font-size:12px;">
                 </div>
             </header>
 
@@ -69,28 +79,29 @@
 
                     <div class="chat-input-container">
                         <div class="chat-input-wrapper">
-                            <button class="attach-btn">+</button>
                             <input type="text" id="messageInputField" placeholder="Message #welcome-and-rules">
-                            <div class="input-icons">😀</div>
+                            
+                            <div class="emoji-wrapper">
+                                <button class="emoji-trigger-btn" id="emojiMenuBtn">😀</button>
+                                <div class="emoji-picker-tray" id="emojiPickerTray">
+                                    <span>😀</span><span>😂</span><span>🔥</span><span>👀</span><span>💯</span>
+                                    <span>🥛</span><span>🤖</span><span>👑</span><span>👍</span><span>🎉</span>
+                                    <span>🚀</span><span>🎮</span><span>💀</span><span>💖</span><span>✨</span>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
 
                 <div class="members-sidebar">
-                    <div class="member-group-title">ONLINE — 1</div>
-                    <div class="member-card">
-                        <div class="member-avatar"></div>
-                        <div>
-                            <div class="member-name">Cowmilk 👑</div>
-                            <div class="member-game">🎮 ROBLOX</div>
+                    <div class="member-group-title">ONLINE — <span id="onlineCount">3</span></div>
+                    <div class="member-list-container" id="memberListGrid">
                         </div>
-                    </div>
                 </div>
 
             </div>
-
         </div>
-
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
