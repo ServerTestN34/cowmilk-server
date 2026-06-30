@@ -1,22 +1,33 @@
 document.addEventListener("DOMContentLoaded", () => {
     
-    // 1. FIREBASE SETUP
+    // 1. FIREBASE CONFIGURATION
     const firebaseConfig = {
         databaseURL: "https://cowmilk-chat-default-rtdb.firebaseio.com"
     };
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // 2. ACTIVE SYSTEM USER STATE
-    let currentUser = {
-        username: "Cowmilk",
-        avatar: "#5865f2",
-        status: "🎮 ROBLOX"
-    };
+    // 2. RUNTIME SYSTEM APP STATE
+    let currentUser = { username: "Cowmilk", avatarUrl: "", status: "🎮 ROBLOX" };
     let currentChannel = "welcome-and-rules";
     let currentLiveListener = null;
+    
+    // Multi-thread Message Routing References
+    let activeReplyTargetId = null;
+    let messageToForwardData = null;
 
-    // 3. ELEMENT SELECTORS
+    // TEXT SHORTCODE DICTIONARY
+    const EMOJI_SHORTCODES = {
+        ":sob:": "😭",
+        ":smile:": "😀",
+        ":joy:": "😂",
+        ":fire:": "🔥",
+        ":eyes:": "👀",
+        ":100:": "💯",
+        ":milk:": "🥛"
+    };
+
+    // 3. UI ELEMENT SELECTORS
     const channels = document.querySelectorAll(".channel");
     const channelHeaderTitle = document.getElementById("headerChannelName");
     const chatInput = document.getElementById("messageInputField");
@@ -26,55 +37,85 @@ document.addEventListener("DOMContentLoaded", () => {
     const menuToggleBtn = document.getElementById("menuToggleBtn");
     const menuOverlay = document.getElementById("menuOverlay");
 
-    // Profile Modal Elements
+    // Profile Setup DOM Elements
     const identityModal = document.getElementById("identityModal");
-    const profileButtons = document.querySelectorAll(".profile-select-btn");
+    const confirmProfileBtn = document.getElementById("confirmProfileBtn");
+    const modalUsernameInput = document.getElementById("modalUsernameInput");
+    const modalAvatarInput = document.getElementById("modalAvatarInput");
+    const modalStatusInput = document.getElementById("modalStatusInput");
     const memberListGrid = document.getElementById("memberListGrid");
+
+    // Forward Dialog Selectors
+    const forwardModal = document.getElementById("forwardModal");
+    const forwardChannelListContainer = document.getElementById("forwardChannelListContainer");
+    const closeForwardModalBtn = document.getElementById("closeForwardModalBtn");
+
+    // Reply Mode UI Elements
+    const replyPreviewBar = document.getElementById("replyPreviewBar");
+    const replyTargetUsername = document.getElementById("replyTargetUsername");
+    const replyTargetSnippet = document.getElementById("replyTargetSnippet");
+    const cancelReplyBtn = document.getElementById("cancelReplyBtn");
+
+    // Media Upload Element
+    const imageAttachmentFileInput = document.getElementById("imageAttachmentFileInput");
 
     // Emoji Box Selectors
     const emojiMenuBtn = document.getElementById("emojiMenuBtn");
     const emojiPickerTray = document.getElementById("emojiPickerTray");
 
-    // --- LOGIC: IDENTITY SELECTOR SYSTEM ---
-    profileButtons.forEach(btn => {
-        btn.addEventListener("click", () => {
-            currentUser.username = btn.getAttribute("data-user");
-            currentUser.avatar = btn.getAttribute("data-avatar");
-            currentUser.status = btn.getAttribute("data-game");
+    // --- INITIALIZE ACCOUNT SETUP ON SUBMIT ---
+    confirmProfileBtn.addEventListener("click", () => {
+        const enteredName = modalUsernameInput.value.trim();
+        const enteredAvatar = modalAvatarInput.value.trim();
+        const enteredStatus = modalStatusInput.value.trim();
 
-            // Apply user identity values globally
-            document.getElementById("globalUsername").textContent = currentUser.username;
-            document.getElementById("globalUserStatus").textContent = currentUser.status;
-            document.getElementById("globalUserAvatar").style.backgroundColor = currentUser.avatar;
+        if(enteredName === "") return alert("Username field cannot be blank.");
 
-            // Hide Picker and open server application
-            identityModal.style.display = "none";
-            
-            // Build the right-hand active participant card layout lists
-            renderMemberList();
-            syncChannelMessages(currentChannel);
-        });
+        currentUser.username = enteredName;
+        currentUser.avatarUrl = enteredAvatar;
+        currentUser.status = enteredStatus;
+
+        // Apply Custom Image Node or fallback to default styled letter layout block
+        const imgAvatar = document.getElementById("globalUserAvatar");
+        const placeholderAvatar = document.getElementById("globalUserAvatarPlaceholder");
+        
+        if (currentUser.avatarUrl !== "") {
+            imgAvatar.src = currentUser.avatarUrl;
+            imgAvatar.style.display = "block";
+            placeholderAvatar.style.display = "none";
+        } else {
+            placeholderAvatar.textContent = currentUser.username.charAt(0).toUpperCase();
+            placeholderAvatar.style.backgroundColor = "#5865f2";
+            placeholderAvatar.style.display = "flex";
+            imgAvatar.style.display = "none";
+        }
+
+        document.getElementById("globalUsername").textContent = currentUser.username;
+        document.getElementById("globalUserStatus").textContent = currentUser.status;
+
+        identityModal.style.display = "none";
+        
+        renderMemberList();
+        syncChannelMessages(currentChannel);
     });
 
-    // --- LOGIC: RENDERING STATIC MEMBER DASHBOARD CARD BLOCKS ---
+    // --- RE-RENDER GLOBAL USER DIRECTORY ---
     function renderMemberList() {
+        // Build self profile layout strings dynamically
+        const selfAvatarHTML = currentUser.avatarUrl !== "" 
+            ? `<img class="member-avatar-img" src="${currentUser.avatarUrl}">` 
+            : `<div class="member-avatar" style="background-color:#5865f2; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; color:white;">${currentUser.username.charAt(0).toUpperCase()}</div>`;
+
         memberListGrid.innerHTML = `
             <div class="member-card">
-                <div class="member-avatar" style="background-color: #5865f2;"></div>
+                ${selfAvatarHTML}
                 <div>
-                    <div class="member-name">Cowmilk 👑</div>
-                    <div class="member-game">🎮 ROBLOX</div>
+                    <div class="member-name">${currentUser.username} <small style="color:#5865f2;">(You)</small></div>
+                    <div class="member-game">${currentUser.status}</div>
                 </div>
             </div>
             <div class="member-card">
-                <div class="member-avatar" style="background-color: #e67e22;"></div>
-                <div>
-                    <div class="member-name">Guest Racer</div>
-                    <div class="member-game">🏎️ Mario Kart</div>
-                </div>
-            </div>
-            <div class="member-card">
-                <div class="member-avatar" style="background-color: #9b59b6;"></div>
+                <div class="member-avatar" style="background-color: #9b59b6; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white;">🤖</div>
                 <div>
                     <div class="member-name">🤖 Clyde-AI</div>
                     <div class="member-game">⚙️ Core Matrix</div>
@@ -83,38 +124,74 @@ document.addEventListener("DOMContentLoaded", () => {
         `;
     }
 
-    // --- MOBILE ASSIST ACTIONS ---
+    // --- SHORTCODE PARSER FUNCTION ---
+    function parseShortcodes(text) {
+        let processedText = text;
+        for (const [code, emoji] of Object.entries(EMOJI_SHORTCODES)) {
+            processedText = processedText.replace(new RegExp(code, 'gi'), emoji);
+        }
+        return processedText;
+    }
+
+    // --- FILE SYSTEM LOCAL BASE64 READER TRICK (SEND PICTURES) ---
+    imageAttachmentFileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith("image/")) {
+            alert("Only image attachments are allowed.");
+            return;
+        }
+
+        const fileReader = new FileReader();
+        fileReader.onload = () => {
+            const rawBase64String = fileReader.result;
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            // Send base64 payload to database instance
+            database.ref(`channels/${currentChannel}`).push({
+                username: currentUser.username,
+                avatarUrl: currentUser.avatarUrl,
+                time: `Today at ${timeString}`,
+                text: "", 
+                imageUrl: rawBase64String, // Store image string node
+                edited: false
+            });
+            imageAttachmentFileInput.value = ""; // Reset input
+        };
+        fileReader.readAsDataURL(file);
+    });
+
+    // --- MOBILE SIDEBAR NAVIGATION ---
     menuToggleBtn.addEventListener("click", () => appContainer.classList.add("menu-open"));
     menuOverlay.addEventListener("click", () => appContainer.classList.remove("menu-open"));
 
-    // --- EMOJI INPUT SELECTION INTERACTIVE HOOKS ---
-    emojiMenuBtn.addEventListener("click", (e) => {
-        e.stopPropagation();
-        emojiPickerTray.classList.toggle("active");
-    });
-
+    // --- INTERACTIVE KEYBOARD EMOJI SELECTION ---
+    emojiMenuBtn.addEventListener("click", (e) => { e.stopPropagation(); emojiPickerTray.classList.toggle("active"); });
     document.querySelectorAll(".emoji-picker-tray span").forEach(emojiSpan => {
         emojiSpan.addEventListener("click", () => {
-            chatInput.value += emojiSpan.textContent; // Insert emoji at end of text string
+            chatInput.value += emojiSpan.textContent;
             chatInput.focus();
         });
     });
-
-    // Hide drawer automatically if anywhere else is clicked
     document.addEventListener("click", () => emojiPickerTray.classList.remove("active"));
 
-    // --- FIREBASE LOGIC: RENDERING CLOUD DATA BLOCKS ---
+    // --- INTERACTIVE LAYER: CANCEL REPLY ---
+    cancelReplyBtn.addEventListener("click", () => {
+        activeReplyTargetId = null;
+        replyPreviewBar.style.display = "none";
+    });
+
+    // --- INTERACTIVE LAYER: CLOSE FORWARD OPTIONS ---
+    closeForwardModalBtn.addEventListener("click", () => {
+        forwardModal.style.display = "none";
+        messageToForwardData = null;
+    });
+
+    // --- STREAM PIPELINE LOGIC: RENDER CHAT VIEWER CELLS ---
     function renderMessages(channelKey, snapshot) {
         chatMessagesContainer.innerHTML = "";
-
-        const splash = document.createElement("div");
-        splash.classList.add("welcome-splash");
-        splash.innerHTML = `
-            <h1>Welcome to<br>#${channelKey}</h1>
-            <p>This is the start of the #${channelKey} channel.</p>
-            <div class="date-divider"><span>June 2026</span></div>
-        `;
-        chatMessagesContainer.appendChild(splash);
 
         if (!snapshot.exists()) return;
 
@@ -122,60 +199,134 @@ document.addEventListener("DOMContentLoaded", () => {
             const msgId = childSnapshot.key;
             const msg = childSnapshot.val();
             
-            const msgElement = document.createElement("div");
-            msgElement.classList.add("message");
+            const messageWrapper = document.createElement("div");
+            messageWrapper.classList.add("message-wrapper-block");
+
+            // Build Reply Quote layout blocks if reference keys point to parent text data
+            let replyLineHTML = "";
+            if (msg.replyTo) {
+                replyLineHTML = `
+                    <div class="message-reply-header">
+                        💬 replied to <strong>${msg.replyTo.username}</strong>: "${escapeHTML(msg.replyTo.snippet)}"
+                    </div>
+                `;
+            }
 
             const isBot = msg.username.includes("🤖");
-            const avatarColor = msg.avatarColor || (isBot ? "#9b59b6" : "#3ba55d");
-
-            // Append (edited) tag if edited configuration flag evaluate true
             const editedBadgeHTML = msg.edited ? `<span class="msg-edited-tag">(edited)</span>` : '';
+            const forwardedBadgeHTML = msg.forwarded ? `<span class="msg-forwarded-tag">Forwarded</span>` : '';
 
-            // Only allow the creator of the text to alter their records
-            const actionsHTML = (msg.username === currentUser.username && !isBot) ? `
-                <div class="message-actions">
-                    <button class="action-btn edit-btn">✏️</button>
-                    <button class="action-btn delete-btn">🗑️</button>
-                </div>
+            // Render Embedded Image Blocks if field attributes detect data strings
+            let mediaEmbedHTML = msg.imageUrl ? `<img src="${msg.imageUrl}" class="msg-image-embed">` : '';
+
+            const userAvatarHTML = msg.avatarUrl && msg.avatarUrl !== "" 
+                ? `<img class="message-avatar" src="${msg.avatarUrl}" style="object-fit:cover;">` 
+                : `<div class="message-avatar" style="background-color:#3ba55d; display:flex; align-items:center; justify-content:center; font-weight:bold; color:white; font-size:16px;">${msg.username.charAt(0).toUpperCase()}</div>`;
+
+            // Action Utility Row Grid Panels Setup
+            const modifyToolsHTML = (msg.username === currentUser.username && !isBot) ? `
+                <button class="action-btn edit-btn" title="Edit Message">✏️</button>
+                <button class="action-btn delete-btn" title="Delete Message">🗑️</button>
             ` : '';
 
-            msgElement.innerHTML = `
-                <div class="message-avatar" style="background-color: ${avatarColor} !important;"></div>
-                <div class="message-content">
-                    <div class="message-meta">
-                        <span class="msg-username" style="color: ${isBot ? '#9b59b6' : '#ffffff'}">${msg.username}</span>
-                        <span class="msg-timestamp">${msg.time} ${editedBadgeHTML}</span>
+            messageWrapper.innerHTML = `
+                ${replyLineHTML}
+                <div class="message" data-id="${msgId}">
+                    ${userAvatarHTML}
+                    <div class="message-content">
+                        <div class="message-meta">
+                            <span class="msg-username">${msg.username}</span>
+                            <span class="msg-timestamp">${msg.time} ${editedBadgeHTML} ${forwardedBadgeHTML}</span>
+                        </div>
+                        <p class="msg-text">${escapeHTML(msg.text)}</p>
+                        ${mediaEmbedHTML}
                     </div>
-                    <p class="msg-text">${escapeHTML(msg.text)}</p>
+                    <div class="message-actions">
+                        <button class="action-btn reply-btn" title="Reply to Message">↩️</button>
+                        <button class="action-btn forward-btn" title="Forward Message">➡️</button>
+                        ${modifyToolsHTML}
+                    </div>
                 </div>
-                ${actionsHTML}
             `;
 
+            // ATTACH CLICK HOOKS TO MESSAGE ACTIONS
+            messageWrapper.querySelector(".reply-btn").addEventListener("click", () => {
+                activeReplyTargetId = msgId;
+                replyTargetUsername.textContent = msg.username;
+                replyTargetSnippet.textContent = msg.text ? msg.text : "Image File Attachment";
+                replyPreviewBar.style.display = "flex";
+                chatInput.focus();
+            });
+
+            messageWrapper.querySelector(".forward-btn").addEventListener("click", () => {
+                messageToForwardData = msg;
+                openForwardTargetSelectionDialog();
+            });
+
             if (msg.username === currentUser.username && !isBot) {
-                msgElement.querySelector(".delete-btn").addEventListener("click", () => {
+                messageWrapper.querySelector(".delete-btn").addEventListener("click", () => {
                     if (confirm("Delete this message permanently?")) {
                         database.ref(`channels/${currentChannel}/${msgId}`).remove();
                     }
                 });
 
-                msgElement.querySelector(".edit-btn").addEventListener("click", () => {
+                messageWrapper.querySelector(".edit-btn").addEventListener("click", () => {
                     const newText = prompt("Edit your message:", msg.text);
                     if (newText !== null && newText.trim() !== "") {
                         database.ref(`channels/${currentChannel}/${msgId}`).update({
-                            text: newText.trim(),
-                            edited: true // Set flag to true
+                            text: parseShortcodes(newText.trim()), // parse text shortcodes on edit too
+                            edited: true
                         });
                     }
                 });
             }
 
-            chatMessagesContainer.appendChild(msgElement);
+            chatMessagesContainer.appendChild(messageWrapper);
         });
 
         chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
     }
 
-    // --- PIPELINE MANAGER ---
+    // --- SETUP FORWARDING ROUTING MENU MODAL ---
+    function openForwardTargetSelectionDialog() {
+        forwardChannelListContainer.innerHTML = "";
+        forwardModal.style.display = "flex";
+
+        channels.forEach(ch => {
+            const chName = ch.textContent.replace('# ', '').trim();
+            // List all channel alternatives
+            if (chName !== currentChannel) {
+                const row = document.createElement("div");
+                row.classList.add("forward-target-row");
+                row.textContent = `# ${chName}`;
+                
+                row.addEventListener("click", () => {
+                    if (messageToForwardData) {
+                        const now = new Date();
+                        const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                        // Push cloned record to target channel database node path
+                        database.ref(`channels/${chName}`).push({
+                            username: messageToForwardData.username,
+                            avatarUrl: messageToForwardData.avatarUrl,
+                            time: `Today at ${timeString}`,
+                            text: messageToForwardData.text,
+                            imageUrl: messageToForwardData.imageUrl || "",
+                            forwarded: true,
+                            edited: false
+                        });
+
+                        forwardModal.style.display = "none";
+                        messageToForwardData = null;
+                        alert(`Message forwarded to #${chName}!`);
+                    }
+                });
+                forwardChannelListContainer.appendChild(row);
+            }
+        });
+    }
+
+    // --- TUNNEL STREAM MANAGERS ---
     function syncChannelMessages(channelKey) {
         if (currentLiveListener) {
             database.ref(`channels/${currentChannel}`).off();
@@ -185,7 +336,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- CHANNELS EVENT CONFIGS ---
+    // --- DYNAMIC SWITCH CHANNEL ROUTER ---
     channels.forEach(channel => {
         channel.addEventListener("click", () => {
             document.querySelector(".channel.active")?.classList.remove("active");
@@ -198,26 +349,48 @@ document.addEventListener("DOMContentLoaded", () => {
             chatInput.placeholder = `Message #${channelName}`;
 
             appContainer.classList.remove("menu-open");
+            
+            // Wipe active temporary message states on channel changes
+            activeReplyTargetId = null;
+            replyPreviewBar.style.display = "none";
+
             syncChannelMessages(currentChannel);
         });
     });
 
-    // --- SEND TRIGGER HOOK ---
+    // --- ATTACH INPUT ENTER KEY KEYDOWN PROCESSOR ---
     chatInput.addEventListener("keydown", (event) => {
         if (event.key === "Enter" && chatInput.value.trim() !== "") {
-            const messageText = chatInput.value.trim();
+            let messageText = chatInput.value.trim();
+            
+            // RUN SHORTCODE CONVERSION DISPATCH
+            messageText = parseShortcodes(messageText);
+
             const now = new Date();
             const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            database.ref(`channels/${currentChannel}`).push({
+            let outboundPayload = {
                 username: currentUser.username,
-                avatarColor: currentUser.avatar,
+                avatarUrl: currentUser.avatarUrl,
                 time: `Today at ${timeString}`,
                 text: messageText,
                 edited: false
-            });
+            };
 
+            // Inject structural reply target node mapping if flag references exist
+            if (activeReplyTargetId) {
+                outboundPayload.replyTo = {
+                    username: replyTargetUsername.textContent,
+                    snippet: replyTargetSnippet.textContent.substring(0, 40)
+                };
+            }
+
+            database.ref(`channels/${currentChannel}`).push(outboundPayload);
+
+            // Reset Input and Reply configurations instantly
             chatInput.value = "";
+            activeReplyTargetId = null;
+            replyPreviewBar.style.display = "none";
 
             if (currentChannel === "ai-bot-test") {
                 triggerSmartBotResponse(messageText);
@@ -225,7 +398,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // --- BOT CORE LOGIC ---
+    // --- AI BOT RESPONSE LOOP ---
     function triggerSmartBotResponse(userPrompt) {
         setTimeout(() => {
             const now = new Date();
@@ -257,6 +430,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             database.ref("channels/ai-bot-test").push({
                 username: "🤖 Clyde-AI",
+                avatarUrl: "",
                 time: `Today at ${timeString}`,
                 text: aiReply,
                 edited: false

@@ -8,31 +8,52 @@
 </head>
 <body>
 
+    <!-- PROFILES PICKER MODAL -->
     <div class="identity-modal" id="identityModal">
         <div class="modal-card">
-            <h2>Select Your Profile</h2>
-            <p>Choose an identity to log into CowMilk's server:</p>
-            <div class="profile-options">
-                <div class="profile-select-btn" data-user="Cowmilk" data-avatar="#5865f2" data-game="🎮 ROBLOX">
-                    <div class="sel-avatar" style="background-color: #5865f2;"></div>
-                    <span>Cowmilk</span>
-                </div>
-                <div class="profile-select-btn" data-user="Guest Racer" data-avatar="#e67e22" data-game="🏎️ Mario Kart">
-                    <div class="sel-avatar" style="background-color: #e67e22;"></div>
-                    <span>Guest Racer</span>
-                </div>
+            <h2>Setup Your Profile</h2>
+            <p>Choose your display identity & user credentials:</p>
+            
+            <div class="profile-input-group">
+                <label>Display Username:</label>
+                <input type="text" id="modalUsernameInput" value="Cowmilk">
             </div>
+
+            <div class="profile-input-group">
+                <label>Avatar Picture URL:</label>
+                <input type="text" id="modalAvatarInput" placeholder="Paste image address (or leave blank for random)">
+            </div>
+
+            <div class="profile-input-group">
+                <label>Playing Status:</label>
+                <input type="text" id="modalStatusInput" value="🎮 ROBLOX">
+            </div>
+
+            <button class="join-server-btn" id="confirmProfileBtn">Join Server</button>
+        </div>
+    </div>
+
+    <!-- MESSAGES FORWARD SELECTION DIALOG -->
+    <div class="identity-modal" id="forwardModal" style="display: none;">
+        <div class="modal-card">
+            <h2>Forward Message</h2>
+            <p>Select target destination text channel:</p>
+            <div class="profile-options" id="forwardChannelListContainer">
+                <!-- Injected via JavaScript dynamically -->
+            </div>
+            <button class="join-server-btn cancel-btn" id="closeForwardModalBtn" style="background-color: #4e5058; margin-top: 12px;">Cancel</button>
         </div>
     </div>
 
     <div class="discord-app" id="appContainer">
-        
         <div class="mobile-overlay" id="menuOverlay"></div>
 
+        <!-- COLUMN 1: Far Left Server Sidebar -->
         <div class="servers-sidebar">
             <div class="server-icon active">🥛</div>
         </div>
 
+        <!-- COLUMN 2: Channels Sidebar -->
         <div class="channels-sidebar">
             <div class="server-header">
                 <h2>CowMilk's server</h2>
@@ -53,7 +74,8 @@
 
             <div class="user-profile-bar">
                 <div class="user-info">
-                    <div class="profile-avatar" id="globalUserAvatar"></div>
+                    <img class="profile-avatar" id="globalUserAvatar" src="" style="display:none; object-fit: cover;">
+                    <div class="profile-avatar" id="globalUserAvatarPlaceholder"></div>
                     <div>
                         <div class="username" id="globalUsername">Loading...</div>
                         <div class="user-status" id="globalUserStatus">Connecting...</div>
@@ -62,6 +84,7 @@
             </div>
         </div>
 
+        <!-- MAIN WINDOW CONTAINER -->
         <div class="main-window">
             
             <header class="channel-header">
@@ -74,11 +97,25 @@
             <div class="inner-content">
                 
                 <div class="chat-area">
-                    <div class="chat-messages">
+                    <!-- REPLY INDICATOR BANNER LAYER -->
+                    <div class="reply-preview-bar" id="replyPreviewBar">
+                        <div class="reply-preview-details">
+                            Replying to <span id="replyTargetUsername" style="font-weight: bold;">User</span>: 
+                            <span id="replyTargetSnippet" style="font-style: italic;">Text...</span>
                         </div>
+                        <button class="close-reply-btn" id="cancelReplyBtn">×</button>
+                    </div>
+
+                    <div class="chat-messages">
+                        <!-- Pulling data dynamically from cloud pipeline streams -->
+                    </div>
 
                     <div class="chat-input-container">
                         <div class="chat-input-wrapper">
+                            <!-- IMAGE ATTACHMENT ACTION BAR -->
+                            <label class="attach-btn" for="imageAttachmentFileInput">+</label>
+                            <input type="file" id="imageAttachmentFileInput" accept="image/*" style="display: none;">
+
                             <input type="text" id="messageInputField" placeholder="Message #welcome-and-rules">
                             
                             <div class="emoji-wrapper">
@@ -86,7 +123,7 @@
                                 <div class="emoji-picker-tray" id="emojiPickerTray">
                                     <span>😀</span><span>😂</span><span>🔥</span><span>👀</span><span>💯</span>
                                     <span>🥛</span><span>🤖</span><span>👑</span><span>👍</span><span>🎉</span>
-                                    <span>🚀</span><span>🎮</span><span>💀</span><span>💖</span><span>✨</span>
+                                    <span>😭</span><span>💀</span><span>😡</span><span>💖</span><span>✨</span>
                                 </div>
                             </div>
 
@@ -94,16 +131,19 @@
                     </div>
                 </div>
 
+                <!-- COLUMN 3: Member List Sidebar -->
                 <div class="members-sidebar">
-                    <div class="member-group-title">ONLINE — <span id="onlineCount">3</span></div>
+                    <div class="member-group-title">ONLINE — 2</div>
                     <div class="member-list-container" id="memberListGrid">
-                        </div>
+                        <!-- Injected programmatically via JS app instances -->
+                    </div>
                 </div>
 
             </div>
         </div>
     </div>
 
+    <!-- Firebase SDK Modules Integration -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 

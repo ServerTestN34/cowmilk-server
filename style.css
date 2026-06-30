@@ -12,14 +12,14 @@ body, html {
     background-color: #313338;
 }
 
-/* --- IDENTITY SELECTOR WINDOWS --- */
+/* --- PROFILES FORMS PICKER OVERLAYS --- */
 .identity-modal {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-color: rgba(30, 31, 34, 0.95);
+    background-color: rgba(30, 31, 34, 0.96);
     z-index: 100;
     display: flex;
     align-items: center;
@@ -28,57 +28,98 @@ body, html {
 
 .modal-card {
     background-color: #313338;
-    padding: 32px;
+    padding: 28px;
     border-radius: 8px;
-    text-align: center;
     border: 1px solid #404249;
-    max-width: 400px;
+    max-width: 420px;
     width: 90%;
 }
 
 .modal-card h2 {
     color: #fff;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+    text-align: center;
 }
 
 .modal-card p {
     color: #b5bac1;
-    margin-bottom: 24px;
-    font-size: 14px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    text-align: center;
+}
+
+.profile-input-group {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    margin-bottom: 14px;
+    gap: 6px;
+}
+
+.profile-input-group label {
+    color: #949ba4;
+    font-size: 12px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.profile-input-group input {
+    background-color: #1e1f22;
+    border: 1px solid #232428;
+    border-radius: 4px;
+    padding: 10px;
+    color: #dbdee1;
+    font-size: 15px;
+    outline: none;
+}
+
+.profile-input-group input:focus {
+    border-color: #5865f2;
+}
+
+.join-server-btn {
+    width: 100%;
+    background-color: #5865f2;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 12px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 8px;
+}
+
+.join-server-btn:hover {
+    background-color: #4752c4;
 }
 
 .profile-options {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
 }
 
-.profile-select-btn {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+.forward-target-row {
     background-color: #2b2d31;
-    padding: 12px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    border: 1px solid transparent;
-    transition: all 0.2s;
+    padding: 10px;
+    border-radius: 4px;
     color: #fff;
+    cursor: pointer;
     font-weight: bold;
+    text-align: left;
+    border: 1px solid transparent;
 }
 
-.profile-select-btn:hover {
+.forward-target-row:hover {
     border-color: #5865f2;
     background-color: #35373c;
 }
 
-.sel-avatar {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-}
-
-/* --- DISCORD APP MATRIX ENGINE --- */
+/* --- CONTAINER MAIN STRUCTURES --- */
 .discord-app {
     display: flex;
     height: 100vh;
@@ -100,14 +141,13 @@ body, html {
 .server-icon {
     width: 48px;
     height: 48px;
-    background-color: #313338;
+    background-color: #5865f2;
     border-radius: 16px;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 20px;
     cursor: pointer;
-    background-color: #5865f2;
 }
 
 .channels-sidebar {
@@ -242,6 +282,30 @@ body, html {
     min-width: 0;
 }
 
+/* --- NESTED MESSAGES REPLY BANNER PREVIEWS --- */
+.reply-preview-bar {
+    background-color: #2b2d31;
+    border-bottom: 1px solid #232428;
+    padding: 6px 16px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #b5bac1;
+}
+
+.close-reply-btn {
+    background: none;
+    border: none;
+    color: #b5bac1;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.close-reply-btn:hover {
+    color: #fff;
+}
+
 .chat-messages {
     flex: 1;
     overflow-y: auto;
@@ -249,6 +313,35 @@ body, html {
     display: flex;
     flex-direction: column;
     gap: 16px;
+}
+
+/* --- MESSAGE BLOCK CONTAINERS & THREAD LINES --- */
+.message-wrapper-block {
+    display: flex;
+    flex-direction: column;
+}
+
+.message-reply-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #b5bac1;
+    margin-left: 16px;
+    margin-bottom: 4px;
+    position: relative;
+}
+
+.message-reply-header::before {
+    content: "";
+    position: absolute;
+    left: -12px;
+    top: 6px;
+    width: 8px;
+    height: 8px;
+    border-left: 2px solid #4e5058;
+    border-top: 2px solid #4e5058;
+    border-top-left-radius: 4px;
 }
 
 .message {
@@ -296,22 +389,43 @@ body, html {
     margin-left: 4px;
 }
 
+.msg-forwarded-tag {
+    font-size: 10px;
+    color: #5865f2;
+    font-weight: bold;
+    margin-left: 6px;
+    background-color: rgba(88, 101, 242, 0.15);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
 .msg-text {
     color: #dbdee1;
     word-break: break-word;
 }
 
-/* --- MESSAGE ACTIONS UTILITIES --- */
+.msg-image-embed {
+    max-width: 320px;
+    max-height: 240px;
+    border-radius: 6px;
+    margin-top: 6px;
+    display: block;
+    object-fit: contain;
+    background-color: #232428;
+}
+
+/* --- DYNAMIC FLOATING ACTION PANELS --- */
 .message-actions {
     position: absolute;
     right: 16px;
     top: -10px;
     background-color: #313338;
-    border: 1px solid #232428;
+    border: 1px solid #404249;
     border-radius: 4px;
     display: none;
-    gap: 4px;
+    gap: 2px;
     padding: 2px;
+    z-index: 5;
 }
 
 .message:hover .message-actions {
@@ -322,7 +436,7 @@ body, html {
     background: none;
     border: none;
     color: #b5bac1;
-    padding: 4px 8px;
+    padding: 4px 6px;
     font-size: 12px;
     cursor: pointer;
     border-radius: 3px;
@@ -337,7 +451,7 @@ body, html {
     background-color: #f23f43;
 }
 
-/* --- INPUT CONTAINER & EMOJI SYSTEM --- */
+/* --- CHAT CONTROL INPUT WRAPPER --- */
 .chat-input-container {
     padding: 0 16px 24px 16px;
 }
@@ -359,6 +473,25 @@ body, html {
     color: #dbdee1;
     flex: 1;
     font-size: 16px;
+}
+
+.attach-btn {
+    background-color: #4e5058;
+    color: #dbdee1;
+    border: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-right: 12px;
+}
+
+.attach-btn:hover {
+    background-color: #6d6f78;
 }
 
 .emoji-wrapper {
@@ -399,14 +532,13 @@ body, html {
     font-size: 22px;
     cursor: pointer;
     text-align: center;
-    transition: transform 0.1s;
 }
 
 .emoji-picker-tray span:hover {
     transform: scale(1.2);
 }
 
-/* --- MEMBERS DASHBOARD --- */
+/* --- MEMBERS PANEL LIST --- */
 .members-sidebar {
     width: 240px;
     background-color: #2b2d31;
@@ -431,10 +563,11 @@ body, html {
     margin-bottom: 4px;
 }
 
-.member-avatar {
+.member-avatar-img {
     width: 32px;
     height: 32px;
     border-radius: 50%;
+    object-fit: cover;
 }
 
 .member-name {
@@ -459,54 +592,27 @@ body, html {
     z-index: 5;
 }
 
-/* --- RESPONSIVE MEDIA QUERIES --- */
+/* --- MOBILE RESPONSIVE ADAPTATIONS --- */
 @media (max-width: 768px) {
-    .mobile-menu-btn {
-        display: block;
-    }
-
-    .members-sidebar {
-        display: none;
-    }
+    .mobile-menu-btn { display: block; }
+    .members-sidebar { display: none; }
 
     .servers-sidebar {
-        position: absolute;
-        left: -72px;
-        top: 0;
-        height: 100%;
-        z-index: 11;
+        position: absolute; left: -72px; top: 0; height: 100%; z-index: 11;
         transition: transform 0.25s ease;
     }
 
     .channels-sidebar {
-        position: absolute;
-        left: -240px;
-        top: 0;
-        height: 100%;
-        z-index: 11;
+        position: absolute; left: -240px; top: 0; height: 100%; z-index: 11;
         transition: transform 0.25s ease;
     }
 
-    .discord-app.menu-open .servers-sidebar {
-        transform: translateX(72px);
-    }
-
-    .discord-app.menu-open .channels-sidebar {
-        transform: translateX(312px);
-    }
-
-    .discord-app.menu-open .mobile-overlay {
-        display: block;
-    }
+    .discord-app.menu-open .servers-sidebar { transform: translateX(72px); }
+    .discord-app.menu-open .channels-sidebar { transform: translateX(312px); }
+    .discord-app.menu-open .mobile-overlay { display: block; }
 
     .message-actions {
-        display: flex;
-        top: 4px;
-        right: 4px;
-        opacity: 0.6;
+        display: flex; top: 2px; right: 2px; opacity: 0.8;
     }
-
-    .chat-input-container {
-        padding: 0 8px 12px 8px;
-    }
+    .chat-input-container { padding: 0 8px 12px 8px; }
 }
