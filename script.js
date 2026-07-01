@@ -76,12 +76,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 myPresenceRef.onDisconnect().update({
                     state: "offline"
                 });
-                
-                myPresenceRef.set({
-                    username: currentUser.username,
-                    avatarUrl: currentUser.avatarUrl,
-                    status: currentUser.status,
-                    state: "online"
+
+                // Sweep out any stale/duplicate presence nodes that share this
+                // username (leftovers from testing before persistent UIDs,
+                // or from browsers where localStorage got cleared).
+                database.ref("presence").once("value", (snapshot) => {
+                    const staleUpdates = {};
+                    snapshot.forEach(child => {
+                        if (child.key === mySessionUid) return;
+                        const entry = child.val();
+                        if (entry && entry.username &&
+                            entry.username.toLowerCase() === currentUser.username.toLowerCase()) {
+                            staleUpdates[child.key] = null;
+                        }
+                    });
+                    if (Object.keys(staleUpdates).length > 0) {
+                        database.ref("presence").update(staleUpdates);
+                    }
+
+                    myPresenceRef.set({
+                        username: currentUser.username,
+                        avatarUrl: currentUser.avatarUrl,
+                        status: currentUser.status,
+                        state: "online"
+                    });
                 });
             }
         });
