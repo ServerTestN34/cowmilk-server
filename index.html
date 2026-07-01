@@ -8,7 +8,6 @@
 </head>
 <body>
 
-    <!-- PROFILES PICKER MODAL -->
     <div class="identity-modal" id="identityModal">
         <div class="modal-card">
             <h2>Setup Your Profile</h2>
@@ -21,7 +20,7 @@
 
             <div class="profile-input-group">
                 <label>Avatar Picture URL:</label>
-                <input type="text" id="modalAvatarInput" placeholder="Paste image address (or leave blank for random)">
+                <input type="text" id="modalAvatarInput" placeholder="Paste image address (or leave blank)">
             </div>
 
             <div class="profile-input-group">
@@ -33,14 +32,11 @@
         </div>
     </div>
 
-    <!-- MESSAGES FORWARD SELECTION DIALOG -->
     <div class="identity-modal" id="forwardModal" style="display: none;">
         <div class="modal-card">
             <h2>Forward Message</h2>
             <p>Select target destination text channel:</p>
-            <div class="profile-options" id="forwardChannelListContainer">
-                <!-- Injected via JavaScript dynamically -->
-            </div>
+            <div class="profile-options" id="forwardChannelListContainer"></div>
             <button class="join-server-btn cancel-btn" id="closeForwardModalBtn" style="background-color: #4e5058; margin-top: 12px;">Cancel</button>
         </div>
     </div>
@@ -48,45 +44,44 @@
     <div class="discord-app" id="appContainer">
         <div class="mobile-overlay" id="menuOverlay"></div>
 
-        <!-- COLUMN 1: Far Left Server Sidebar -->
         <div class="servers-sidebar">
-            <div class="server-icon active">🥛</div>
+            <div class="server-pill-container">
+                <div class="pill-line"></div>
+                <div class="server-icon active">🥛</div>
+            </div>
         </div>
 
-        <!-- COLUMN 2: Channels Sidebar -->
         <div class="channels-sidebar">
             <div class="server-header">
                 <h2>CowMilk's server</h2>
                 <span class="dropdown-arrow">▼</span>
             </div>
             
-            <div class="channel-list">
-                <div class="category">INFORMATION</div>
-                <div class="channel active"># welcome-and-rules</div>
-                <div class="channel"># announcements</div>
-                <div class="channel"># resources</div>
-                
-                <div class="category">TEXT CHANNELS</div>
-                <div class="channel"># memes</div>
-                <div class="channel"># general-chat</div>
-                <div class="channel"># ai-bot-test</div>
+            <div class="channel-list-container">
+                <div class="channel-section-header">
+                    <span class="category">TEXT CHANNELS</span>
+                    <button class="create-channel-btn" id="createNewChannelActionBtn" title="Create Channel">+</button>
+                </div>
+                <div class="channel-list" id="dynamicChannelContainerRail">
+                    </div>
             </div>
 
             <div class="user-profile-bar">
                 <div class="user-info">
-                    <img class="profile-avatar" id="globalUserAvatar" src="" style="display:none; object-fit: cover;">
-                    <div class="profile-avatar" id="globalUserAvatarPlaceholder"></div>
-                    <div>
-                        <div class="username" id="globalUsername">Loading...</div>
-                        <div class="user-status" id="globalUserStatus">Connecting...</div>
+                    <div class="avatar-wrapper">
+                        <img class="profile-avatar" id="globalUserAvatar" src="" style="display:none; object-fit: cover;">
+                        <div class="profile-avatar" id="globalUserAvatarPlaceholder"></div>
+                        <div class="status-bubble status-online"></div>
+                    </div>
+                    <div class="user-details-text">
+                        <div class="username" id="globalUsername">Connecting...</div>
+                        <div class="user-status" id="globalUserStatus">Syncing...</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- MAIN WINDOW CONTAINER -->
         <div class="main-window">
-            
             <header class="channel-header">
                 <div class="header-left">
                     <button class="mobile-menu-btn" id="menuToggleBtn">☰</button>
@@ -95,24 +90,20 @@
             </header>
 
             <div class="inner-content">
-                
                 <div class="chat-area">
-                    <!-- REPLY INDICATOR BANNER LAYER -->
                     <div class="reply-preview-bar" id="replyPreviewBar">
                         <div class="reply-preview-details">
-                            Replying to <span id="replyTargetUsername" style="font-weight: bold;">User</span>: 
+                            <span class="reply-arrow-curve">┌──</span> Replying to <span id="replyTargetUsername" style="font-weight: bold; color: #fff;">User</span>: 
                             <span id="replyTargetSnippet" style="font-style: italic;">Text...</span>
                         </div>
                         <button class="close-reply-btn" id="cancelReplyBtn">×</button>
                     </div>
 
                     <div class="chat-messages">
-                        <!-- Pulling data dynamically from cloud pipeline streams -->
-                    </div>
+                        </div>
 
                     <div class="chat-input-container">
                         <div class="chat-input-wrapper">
-                            <!-- IMAGE ATTACHMENT ACTION BAR -->
                             <label class="attach-btn" for="imageAttachmentFileInput">+</label>
                             <input type="file" id="imageAttachmentFileInput" accept="image/*" style="display: none;">
 
@@ -126,27 +117,21 @@
                                     <span>😭</span><span>💀</span><span>😡</span><span>💖</span><span>✨</span>
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 </div>
 
-                <!-- COLUMN 3: Member List Sidebar -->
                 <div class="members-sidebar">
-                    <div class="member-group-title">ONLINE — 2</div>
-                    <div class="member-list-container" id="memberListGrid">
-                        <!-- Injected programmatically via JS app instances -->
-                    </div>
+                    <div id="membersContainerList">
+                        </div>
                 </div>
 
             </div>
         </div>
     </div>
 
-    <!-- Firebase SDK Modules Integration -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
-
     <script src="script.js"></script>
 </body>
 </html>
