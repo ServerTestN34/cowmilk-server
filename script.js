@@ -27,13 +27,23 @@ document.addEventListener("DOMContentLoaded", () => {
     let messageToForwardData = null;
     let localMuteRegistry = {};
 
-    // Usernames (lowercase) allowed to run admin commands like !purge and !mute.
+    // Usernames (lowercase) allowed to run admin commands / open the admin panel.
     // Edit this list to whoever should have admin powers in your server.
     const ADMIN_USERNAMES = ["cowmilk"];
 
     const EMOJI_SHORTCODES = {
         ":sob:": "😭", ":smile:": "😀", ":joy:": "😂", ":fire:": "🔥", ":eyes:": "👀", ":100:": "💯", ":milk:": "🥛"
     };
+
+    const REACTION_EMOJI_SET = ["👍", "❤️", "😂", "😮", "😢", "🔥"];
+
+    // --- CHANNEL UNREAD-TRACKING STATE ---
+    let channelLastMessageTimestamps = {};
+    let watchedUnreadChannels = new Set();
+
+    // --- TYPING INDICATOR STATE ---
+    let typingTimeout = null;
+    let latestTypingSnapshotData = null;
 
     // 2. DOM ELEMENT TREE SELECTORS
     const channelHeaderTitle = document.getElementById("headerChannelName");
@@ -49,6 +59,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const identityModal = document.getElementById("identityModal");
     const confirmProfileBtn = document.getElementById("confirmProfileBtn");
     const modalUsernameInput = document.getElementById("modalUsernameInput");
+    const modalPinInput = document.getElementById("modalPinInput");
     const modalAvatarInput = document.getElementById("modalAvatarInput");
     const modalStatusInput = document.getElementById("modalStatusInput");
     const membersContainerList = document.getElementById("membersContainerList");
@@ -65,6 +76,43 @@ document.addEventListener("DOMContentLoaded", () => {
     const imageAttachmentFileInput = document.getElementById("imageAttachmentFileInput");
     const emojiMenuBtn = document.getElementById("emojiMenuBtn");
     const emojiPickerTray = document.getElementById("emojiPickerTray");
+
+    const messageSearchInput = document.getElementById("messageSearchInput");
+    const typingIndicatorBar = document.getElementById("typingIndicatorBar");
+
+    const openAdminPanelBtn = document.getElementById("openAdminPanelBtn");
+    const adminPanelModal = document.getElementById("adminPanelModal");
+    const adminPurgeAmount = document.getElementById("adminPurgeAmount");
+    const adminPurgeBtn = document.getElementById("adminPurgeBtn");
+    const adminMutedList = document.getElementById("adminMutedList");
+    const adminChannelDeleteList = document.getElementById("adminChannelDeleteList");
+    const closeAdminPanelBtn = document.getElementById("closeAdminPanelBtn");
+
+    // Remember the last username used on this browser so the modal is prefilled.
+    const rememberedUsername = localStorage.getItem("cowmilk_last_username");
+    if (rememberedUsername && modalUsernameInput) modalUsernameInput.value = rememberedUsername;
+
+    // --- PIN HASHING (lightweight username-claim system, not real auth) ---
+    async function hashPin(pin) {
+        const rawString = pin + "::cowmilk_salt";
+        if (window.crypto && window.crypto.subtle) {
+            try {
+                const enc = new TextEncoder();
+                const data = enc.encode(rawString);
+                const hashBuffer = await window.crypto.subtle.digest("SHA-256", data);
+                return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+            } catch (e) {
+                // fall through to the simple fallback below
+            }
+        }
+        // Fallback for environments without Web Crypto - not cryptographically
+        // secure, but still avoids storing the raw PIN in the database.
+        let hash = 0;
+        for (let i = 0; i < rawString.length; i++) {
+            hash = ((hash << 5) - hash + rawString.charCodeAt(i)) | 0;
+        }
+        return "fallback_" + Math.abs(hash).toString(16);
+    }
 
     // --- 3. THE PRESENCE HEARTBEAT SYSTEM ---
     function initializeUserPresence() {
@@ -227,11 +275,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     appContainer?.classList.remove("menu-open");
                     activeReplyTargetId = null;
                     if (replyPreviewBar) replyPreviewBar.style.display = "none";
+                    if (messageSearchInput) messageSearchInput.value = "";
                     
                     document.querySelector(".channel.active")?.classList.remove("active");
                     chElement.classList.add("active");
                     
                     syncChannelMessages(currentChannel);
+                    renderTypingIndicator();
                 });
 
                 chElement.querySelector(".delete-channel-trash").addEventListener("click", (e) => {
@@ -247,6 +297,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
 
                 dynamicChannelContainerRail.appendChild(chElement);
+
+                if (!watchedUnreadChannels.has(chKey)) {
+                    watchedUnreadChannels.add(chKey);
+                    watchChannelForUnread(chKey);
+                } else {
+                    updateChannelUnreadDot(chKey);
+                }
             });
         });
     }
@@ -262,40 +319,73 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- 5. PROFILE SCREEN INITIALIZATION ---
+    // --- 5. PROFILE SCREEN INITIALIZATION (username + PIN claim) ---
     if (confirmProfileBtn) {
-        confirmProfileBtn.addEventListener("click", () => {
+        confirmProfileBtn.addEventListener("click", async () => {
             const enteredName = modalUsernameInput?.value.trim() || "Cowmilk";
+            const enteredPin = modalPinInput?.value.trim() || "";
             const enteredAvatar = modalAvatarInput?.value.trim() || "";
             const enteredStatus = modalStatusInput?.value.trim() || "🎮 ROBLOX";
 
-            if(enteredName === "") return alert("Username cannot be blank.");
+            if (enteredName === "") return alert("Username cannot be blank.");
+            if (enteredPin.length < 4) return alert("Please choose a PIN with at least 4 characters. It locks your username so no one else can use it.");
 
-            currentUser.username = enteredName;
-            currentUser.avatarUrl = enteredAvatar;
-            currentUser.status = enteredStatus;
+            confirmProfileBtn.disabled = true;
+            confirmProfileBtn.textContent = "Checking name...";
 
-            const imgAvatar = document.getElementById("globalUserAvatar");
-            const placeholderAvatar = document.getElementById("globalUserAvatarPlaceholder");
-            
-            if (currentUser.avatarUrl !== "" && imgAvatar) {
-                imgAvatar.src = currentUser.avatarUrl;
-                imgAvatar.style.display = "block";
-                if (placeholderAvatar) placeholderAvatar.style.display = "none";
-            } else if (placeholderAvatar) {
-                placeholderAvatar.textContent = currentUser.username.charAt(0).toUpperCase();
-                placeholderAvatar.style.display = "flex";
-                if (imgAvatar) imgAvatar.style.display = "none";
+            try {
+                const lowerName = enteredName.toLowerCase();
+                const pinHash = await hashPin(enteredPin);
+                const registryRef = database.ref(`usernameRegistry/${lowerName}`);
+                const snap = await registryRef.once("value");
+
+                if (snap.exists()) {
+                    const record = snap.val();
+                    if (record.pinHash !== pinHash) {
+                        alert("That username is already claimed and this PIN doesn't match. Pick a different name, or enter the correct PIN.");
+                        confirmProfileBtn.disabled = false;
+                        confirmProfileBtn.textContent = "Join Server";
+                        return;
+                    }
+                } else {
+                    await registryRef.set({ pinHash: pinHash, claimedAt: Date.now() });
+                }
+
+                currentUser.username = enteredName;
+                currentUser.avatarUrl = enteredAvatar;
+                currentUser.status = enteredStatus;
+                localStorage.setItem("cowmilk_last_username", enteredName);
+
+                const imgAvatar = document.getElementById("globalUserAvatar");
+                const placeholderAvatar = document.getElementById("globalUserAvatarPlaceholder");
+
+                if (currentUser.avatarUrl !== "" && imgAvatar) {
+                    imgAvatar.src = currentUser.avatarUrl;
+                    imgAvatar.style.display = "block";
+                    if (placeholderAvatar) placeholderAvatar.style.display = "none";
+                } else if (placeholderAvatar) {
+                    placeholderAvatar.textContent = currentUser.username.charAt(0).toUpperCase();
+                    placeholderAvatar.style.display = "flex";
+                    if (imgAvatar) imgAvatar.style.display = "none";
+                }
+
+                const globalUserEl = document.getElementById("globalUsername");
+                const globalStatusEl = document.getElementById("globalUserStatus");
+                if (globalUserEl) globalUserEl.textContent = currentUser.username;
+                if (globalStatusEl) globalStatusEl.textContent = currentUser.status;
+
+                if (openAdminPanelBtn) {
+                    openAdminPanelBtn.style.display = ADMIN_USERNAMES.includes(currentUser.username.toLowerCase()) ? "flex" : "none";
+                }
+
+                if (identityModal) identityModal.style.display = "none";
+
+                initializeUserPresence();
+            } catch (err) {
+                alert("Something went wrong connecting to the server. Try again.");
+                confirmProfileBtn.disabled = false;
+                confirmProfileBtn.textContent = "Join Server";
             }
-
-            const globalUserEl = document.getElementById("globalUsername");
-            const globalStatusEl = document.getElementById("globalUserStatus");
-            if (globalUserEl) globalUserEl.textContent = currentUser.username;
-            if (globalStatusEl) globalStatusEl.textContent = currentUser.status;
-
-            if (identityModal) identityModal.style.display = "none";
-            
-            initializeUserPresence();
         });
     }
 
@@ -330,6 +420,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     username: currentUser.username,
                     avatarUrl: currentUser.avatarUrl,
                     time: `Today at ${timeString}`,
+                    timestamp: Date.now(),
                     text: "", 
                     imageUrl: fileReader.result, 
                     edited: false
@@ -355,17 +446,195 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     });
-    document.addEventListener("click", () => emojiPickerTray?.classList.remove("active"));
+    document.addEventListener("click", () => {
+        emojiPickerTray?.classList.remove("active");
+        document.querySelectorAll(".reaction-picker-tray").forEach(t => t.remove());
+    });
     cancelReplyBtn?.addEventListener("click", () => { activeReplyTargetId = null; if (replyPreviewBar) replyPreviewBar.style.display = "none"; });
     closeForwardModalBtn?.addEventListener("click", () => { if (forwardModal) forwardModal.style.display = "none"; messageToForwardData = null; });
     menuToggleBtn?.addEventListener("click", () => appContainer?.classList.add("menu-open"));
     menuOverlay?.addEventListener("click", () => appContainer?.classList.remove("menu-open"));
 
+    // --- Message search (filters currently loaded messages in this channel) ---
+    messageSearchInput?.addEventListener("input", () => {
+        const query = messageSearchInput.value.trim().toLowerCase();
+        document.querySelectorAll(".message-wrapper-block").forEach(wrapper => {
+            if (query === "") {
+                wrapper.style.display = "";
+                return;
+            }
+            const textEl = wrapper.querySelector(".msg-text, .msg-system-notice");
+            const usernameEl = wrapper.querySelector(".msg-username");
+            const combined = ((textEl?.textContent || "") + " " + (usernameEl?.textContent || "")).toLowerCase();
+            wrapper.style.display = combined.includes(query) ? "" : "none";
+        });
+    });
+
+    // --- Admin panel open/close ---
+    openAdminPanelBtn?.addEventListener("click", () => {
+        if (!ADMIN_USERNAMES.includes(currentUser.username.toLowerCase())) return;
+        renderAdminPanel();
+        if (adminPanelModal) adminPanelModal.style.display = "flex";
+    });
+    closeAdminPanelBtn?.addEventListener("click", () => { if (adminPanelModal) adminPanelModal.style.display = "none"; });
+
+    adminPurgeBtn?.addEventListener("click", () => {
+        const amount = parseInt(adminPurgeAmount?.value, 10);
+        if (isNaN(amount) || amount <= 0) return alert("Enter a valid amount.");
+        database.ref(`channels/${currentChannel}`).orderByKey().limitToLast(amount).once("value", (snapshot) => {
+            if (!snapshot.exists()) return;
+            let updates = {};
+            snapshot.forEach(child => { updates[child.key] = null; });
+            database.ref(`channels/${currentChannel}`).update(updates).then(() => {
+                postSystemMessage(`🧹 Administrative Action: Wiped last ${amount} messages via Admin Panel.`);
+            });
+        });
+    });
+
+    function renderAdminPanel() {
+        if (adminMutedList) {
+            adminMutedList.innerHTML = "";
+            const mutedNames = Object.keys(localMuteRegistry);
+            if (mutedNames.length === 0) {
+                adminMutedList.innerHTML = `<div class="admin-list-row">No muted users</div>`;
+            } else {
+                mutedNames.forEach(name => {
+                    const row = document.createElement("div");
+                    row.classList.add("admin-list-row");
+                    row.innerHTML = `<span>@${escapeHTML(name)}</span>`;
+                    const unmuteBtn = document.createElement("button");
+                    unmuteBtn.textContent = "Unmute";
+                    unmuteBtn.addEventListener("click", () => {
+                        database.ref(`mutedUsers/${name}`).remove().then(renderAdminPanel);
+                    });
+                    row.appendChild(unmuteBtn);
+                    adminMutedList.appendChild(row);
+                });
+            }
+        }
+
+        if (adminChannelDeleteList) {
+            adminChannelDeleteList.innerHTML = "";
+            database.ref("serverMetadata/channels").once("value", (snapshot) => {
+                snapshot.forEach(child => {
+                    const chKey = child.key;
+                    const row = document.createElement("div");
+                    row.classList.add("admin-list-row");
+                    row.innerHTML = `<span># ${escapeHTML(chKey)}</span>`;
+                    const delBtn = document.createElement("button");
+                    delBtn.textContent = "Delete";
+                    delBtn.addEventListener("click", () => {
+                        if (confirm(`Delete #${chKey}?`)) {
+                            database.ref(`serverMetadata/channels/${chKey}`).remove();
+                            database.ref(`channels/${chKey}`).remove();
+                            renderAdminPanel();
+                        }
+                    });
+                    row.appendChild(delBtn);
+                    adminChannelDeleteList.appendChild(row);
+                });
+            });
+        }
+    }
+
+    // --- 7b. TYPING INDICATOR SYSTEM ---
+    if (chatInput) {
+        chatInput.addEventListener("input", () => {
+            database.ref(`typing/${mySessionUid}`).set({
+                username: currentUser.username,
+                channel: currentChannel,
+                ts: Date.now()
+            });
+            database.ref(`typing/${mySessionUid}`).onDisconnect().remove();
+
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => {
+                database.ref(`typing/${mySessionUid}`).remove();
+            }, 3000);
+        });
+    }
+
+    database.ref("typing").on("value", (snapshot) => {
+        latestTypingSnapshotData = snapshot;
+        renderTypingIndicator();
+    });
+
+    function renderTypingIndicator() {
+        if (!typingIndicatorBar || !latestTypingSnapshotData) return;
+        const typers = [];
+        const now = Date.now();
+        latestTypingSnapshotData.forEach(child => {
+            const t = child.val();
+            if (child.key !== mySessionUid && t.channel === currentChannel && (now - t.ts) < 4000) {
+                typers.push(t.username);
+            }
+        });
+        if (typers.length === 0) {
+            typingIndicatorBar.textContent = "";
+        } else if (typers.length === 1) {
+            typingIndicatorBar.textContent = `${typers[0]} is typing...`;
+        } else if (typers.length <= 3) {
+            typingIndicatorBar.textContent = `${typers.join(", ")} are typing...`;
+        } else {
+            typingIndicatorBar.textContent = `Several people are typing...`;
+        }
+    }
+
+    // --- 7c. UNREAD CHANNEL TRACKING ---
+    function getLastReadTimestamp(channelKey) {
+        return parseInt(localStorage.getItem(`cowmilk_lastRead_${channelKey}`) || "0", 10);
+    }
+    function setLastReadTimestamp(channelKey, ts) {
+        localStorage.setItem(`cowmilk_lastRead_${channelKey}`, String(ts));
+    }
+
+    function watchChannelForUnread(channelKey) {
+        database.ref(`channels/${channelKey}`).orderByChild("timestamp").limitToLast(1)
+            .on("value", (snapshot) => {
+                let latestTs = 0;
+                snapshot.forEach(child => {
+                    const val = child.val();
+                    if (val && val.timestamp) latestTs = val.timestamp;
+                });
+                channelLastMessageTimestamps[channelKey] = latestTs;
+                updateChannelUnreadDot(channelKey);
+            });
+    }
+
+    function updateChannelUnreadDot(channelKey) {
+        if (!dynamicChannelContainerRail) return;
+        const chElement = dynamicChannelContainerRail.querySelector(`[data-ch="${CSS.escape(channelKey)}"]`);
+        if (!chElement) return;
+
+        const lastRead = getLastReadTimestamp(channelKey);
+        const latestTs = channelLastMessageTimestamps[channelKey] || 0;
+        const isUnread = channelKey !== currentChannel && latestTs > lastRead;
+
+        let dot = chElement.querySelector(".channel-unread-dot");
+        if (isUnread) {
+            chElement.classList.add("has-unread");
+            if (!dot) {
+                dot = document.createElement("span");
+                dot.classList.add("channel-unread-dot");
+                chElement.querySelector(".channel-left-group")?.appendChild(dot);
+            }
+        } else {
+            chElement.classList.remove("has-unread");
+            dot?.remove();
+        }
+    }
+
     // --- 8. MESSAGE RENDERING ---
     function renderMessages(channelKey, snapshot) {
         if (!chatMessagesContainer) return;
         chatMessagesContainer.innerHTML = "";
-        if (!snapshot.exists()) return;
+        if (!snapshot.exists()) {
+            if (channelKey === currentChannel) {
+                setLastReadTimestamp(channelKey, Date.now());
+                updateChannelUnreadDot(channelKey);
+            }
+            return;
+        }
 
         snapshot.forEach(childSnapshot => {
             const msgId = childSnapshot.key;
@@ -386,6 +655,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const forwardedBadgeHTML = msg.forwarded ? `<span class="msg-forwarded-tag">Forwarded</span>` : '';
             let mediaEmbedHTML = msg.imageUrl ? `<img src="${escapeHTML(msg.imageUrl)}" class="msg-image-embed">` : '';
 
+            const mentionsMe = !isSystemNotice && msg.text &&
+                msg.text.toLowerCase().includes("@" + currentUser.username.toLowerCase());
+
             let userAvatarHTML = msg.avatarUrl && msg.avatarUrl !== "" 
                 ? `<img class="message-avatar" src="${escapeHTML(msg.avatarUrl)}">` 
                 : `<div class="message-avatar" style="background-color:#5865f2; display:flex; align-items:center; justify-content:center; font-weight:bold; color:white; font-size:16px;">${msg.username.charAt(0).toUpperCase()}</div>`;
@@ -395,13 +667,29 @@ document.addEventListener("DOMContentLoaded", () => {
                 <button class="action-btn delete-btn" title="Delete Message">🗑️</button>
             ` : '';
 
+            const reactBtnHTML = !isSystemNotice ? `<button class="action-btn react-btn" title="Add Reaction">🙂</button>` : '';
+
+            const linkPreviewHTML = !isSystemNotice ? buildLinkPreviewHTML(msg.text) : '';
+
+            let reactionsRowHTML = "";
+            if (msg.reactions) {
+                const pills = Object.keys(msg.reactions).map(emoji => {
+                    const reactors = msg.reactions[emoji] || {};
+                    const count = Object.keys(reactors).length;
+                    if (count === 0) return "";
+                    const mineClass = reactors[mySessionUid] ? "mine" : "";
+                    return `<div class="reaction-pill ${mineClass}" data-emoji="${escapeHTML(emoji)}">${emoji} <span>${count}</span></div>`;
+                }).filter(Boolean).join("");
+                if (pills) reactionsRowHTML = `<div class="reactions-row">${pills}</div>`;
+            }
+
             let contentBodyHTML = isSystemNotice 
                 ? `<p class="msg-system-notice">${escapeHTML(msg.text)}</p>` 
-                : `<p class="msg-text">${escapeHTML(msg.text)}</p>`;
+                : `<p class="msg-text">${linkifyAndMentionify(msg.text)}</p>`;
 
             messageWrapper.innerHTML = `
                 ${replyLineHTML}
-                <div class="message" data-id="${msgId}">
+                <div class="message ${mentionsMe ? 'mentions-me' : ''}" data-id="${msgId}">
                     ${userAvatarHTML}
                     <div class="message-content">
                         <div class="message-meta">
@@ -410,8 +698,11 @@ document.addEventListener("DOMContentLoaded", () => {
                         </div>
                         ${contentBodyHTML}
                         ${mediaEmbedHTML}
+                        ${linkPreviewHTML}
+                        ${reactionsRowHTML}
                     </div>
                     <div class="message-actions" style="${isSystemNotice ? 'display:none !important;' : ''}">
+                        ${reactBtnHTML}
                         <button class="action-btn reply-btn" title="Reply">↩️</button>
                         <button class="action-btn forward-btn" title="Forward">➡️</button>
                         ${modifyToolsHTML}
@@ -432,6 +723,33 @@ document.addEventListener("DOMContentLoaded", () => {
                 openForwardTargetSelectionDialog();
             });
 
+            const reactBtnEl = messageWrapper.querySelector(".react-btn");
+            if (reactBtnEl) {
+                reactBtnEl.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    document.querySelectorAll(".reaction-picker-tray").forEach(t => t.remove());
+                    const tray = document.createElement("div");
+                    tray.classList.add("reaction-picker-tray");
+                    REACTION_EMOJI_SET.forEach(emoji => {
+                        const span = document.createElement("span");
+                        span.textContent = emoji;
+                        span.addEventListener("click", (ev) => {
+                            ev.stopPropagation();
+                            toggleReaction(msgId, emoji);
+                            tray.remove();
+                        });
+                        tray.appendChild(span);
+                    });
+                    messageWrapper.querySelector(".message").appendChild(tray);
+                });
+            }
+
+            messageWrapper.querySelectorAll(".reaction-pill").forEach(pill => {
+                pill.addEventListener("click", () => {
+                    toggleReaction(msgId, pill.getAttribute("data-emoji"));
+                });
+            });
+
             if (!isBot && !isSystemNotice) {
                 messageWrapper.querySelector(".delete-btn").addEventListener("click", () => {
                     if (confirm("Delete this message?")) database.ref(`channels/${currentChannel}/${msgId}`).remove();
@@ -448,6 +766,22 @@ document.addEventListener("DOMContentLoaded", () => {
             chatMessagesContainer.appendChild(messageWrapper);
         });
         chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+
+        if (channelKey === currentChannel) {
+            setLastReadTimestamp(channelKey, Date.now());
+            updateChannelUnreadDot(channelKey);
+        }
+    }
+
+    function toggleReaction(msgId, emoji) {
+        const reactionRef = database.ref(`channels/${currentChannel}/${msgId}/reactions/${emoji}/${mySessionUid}`);
+        reactionRef.once("value", (snap) => {
+            if (snap.exists()) {
+                reactionRef.remove();
+            } else {
+                reactionRef.set(true);
+            }
+        });
     }
 
     function openForwardTargetSelectionDialog() {
@@ -471,6 +805,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 username: messageToForwardData.username,
                                 avatarUrl: messageToForwardData.avatarUrl,
                                 time: `Today at ${timeString}`,
+                                timestamp: Date.now(),
                                 text: messageToForwardData.text,
                                 imageUrl: messageToForwardData.imageUrl || "",
                                 forwarded: true, edited: false
@@ -554,6 +889,7 @@ document.addEventListener("DOMContentLoaded", () => {
             username: "🛡️ System Core",
             avatarUrl: "",
             time: `Today at ${timeString}`,
+            timestamp: Date.now(),
             text: noticeText,
             systemNotice: true
         });
@@ -585,6 +921,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     username: currentUser.username,
                     avatarUrl: currentUser.avatarUrl,
                     time: `Today at ${timeString}`,
+                    timestamp: Date.now(),
                     text: messageText,
                     edited: false
                 };
@@ -597,6 +934,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 database.ref(`channels/${currentChannel}`).push(outboundPayload);
+                database.ref(`typing/${mySessionUid}`).remove();
+                clearTimeout(typingTimeout);
 
                 chatInput.value = "";
                 activeReplyTargetId = null;
@@ -634,12 +973,48 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             database.ref("channels/ai-bot-test").push({
-                username: "🤖 Clyde-AI", avatarUrl: "", time: `Today at ${timeString}`, text: aiReply, edited: false
+                username: "🤖 Clyde-AI", avatarUrl: "", time: `Today at ${timeString}`, timestamp: Date.now(), text: aiReply, edited: false
             });
         }, 700);
     }
 
+    // --- 12. TEXT HELPERS: escaping, mentions, links, previews ---
     function escapeHTML(str) {
         return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+    }
+
+    function linkifyAndMentionify(text) {
+        let safe = escapeHTML(text);
+        safe = safe.replace(/@([a-zA-Z0-9_\-]{2,32})/g, (match, name) => `<span class="mention">@${name}</span>`);
+        safe = safe.replace(/(https?:\/\/[^\s<]+)/g, (url) => {
+            const cleanUrl = url.replace(/[.,!?)]+$/, "");
+            return `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer">${cleanUrl}</a>`;
+        });
+        return safe;
+    }
+
+    function buildLinkPreviewHTML(text) {
+        if (!text) return "";
+        const urlMatch = text.match(/https?:\/\/[^\s<]+/);
+        if (!urlMatch) return "";
+        const url = urlMatch[0].replace(/[.,!?)]+$/, "");
+        const safeUrl = escapeHTML(url);
+
+        if (/\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(url)) {
+            return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
+                        <img src="${safeUrl}" loading="lazy">
+                    </a>`;
+        }
+
+        const ytMatch = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{6,15})/);
+        if (ytMatch) {
+            const videoId = ytMatch[1];
+            return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="link-preview-card">
+                        <img src="https://img.youtube.com/vi/${videoId}/hqdefault.jpg" loading="lazy">
+                        <div class="link-preview-label">▶ YouTube Video</div>
+                    </a>`;
+        }
+
+        return "";
     }
 });

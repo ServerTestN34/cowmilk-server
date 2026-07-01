@@ -19,6 +19,11 @@
             </div>
 
             <div class="profile-input-group">
+                <label>PIN (locks your name so no one else can use it):</label>
+                <input type="password" id="modalPinInput" placeholder="4+ digits or characters" inputmode="numeric">
+            </div>
+
+            <div class="profile-input-group">
                 <label>Avatar Picture URL:</label>
                 <input type="text" id="modalAvatarInput" placeholder="Paste image address (or leave blank)">
             </div>
@@ -38,6 +43,33 @@
             <p>Select target destination text channel:</p>
             <div class="profile-options" id="forwardChannelListContainer"></div>
             <button class="join-server-btn cancel-btn" id="closeForwardModalBtn" style="background-color: #4e5058; margin-top: 12px;">Cancel</button>
+        </div>
+    </div>
+
+    <div class="identity-modal" id="adminPanelModal" style="display: none;">
+        <div class="modal-card admin-modal-card">
+            <h2>🛡️ Admin Panel</h2>
+            <p>Server moderation tools</p>
+
+            <div class="admin-section">
+                <label>Purge Messages (current channel)</label>
+                <div class="admin-inline-row">
+                    <input type="number" id="adminPurgeAmount" min="1" value="10" placeholder="Amount">
+                    <button class="join-server-btn admin-inline-btn" id="adminPurgeBtn">Purge</button>
+                </div>
+            </div>
+
+            <div class="admin-section">
+                <label>Muted Users</label>
+                <div id="adminMutedList" class="admin-list"></div>
+            </div>
+
+            <div class="admin-section">
+                <label>Delete a Channel</label>
+                <div id="adminChannelDeleteList" class="admin-list"></div>
+            </div>
+
+            <button class="join-server-btn cancel-btn" id="closeAdminPanelBtn" style="background-color: #4e5058; margin-top: 4px;">Close</button>
         </div>
     </div>
 
@@ -78,6 +110,7 @@
                         <div class="user-status" id="globalUserStatus">Syncing...</div>
                     </div>
                 </div>
+                <button class="admin-panel-btn" id="openAdminPanelBtn" style="display:none;" title="Admin Panel">🛡️</button>
             </div>
         </div>
 
@@ -86,6 +119,9 @@
                 <div class="header-left">
                     <button class="mobile-menu-btn" id="menuToggleBtn">☰</button>
                     <span class="hashtag">#</span> <span id="headerChannelName">welcome-and-rules</span>
+                </div>
+                <div class="header-right">
+                    <input type="text" id="messageSearchInput" class="search-input" placeholder="🔍 Search messages...">
                 </div>
             </header>
 
@@ -101,6 +137,8 @@
 
                     <div class="chat-messages">
                         </div>
+
+                    <div class="typing-indicator-bar" id="typingIndicatorBar"></div>
 
                     <div class="chat-input-container">
                         <div class="chat-input-wrapper">
