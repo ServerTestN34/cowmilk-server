@@ -1,23 +1,35 @@
 document.addEventListener("DOMContentLoaded", () => {
     
-    // 1. FIREBASE ROOT ENGINE ROUTER
+    // 1. FIREBASE INITIALIZATION
     const firebaseConfig = {
         databaseURL: "https://cowmilk-chat-default-rtdb.firebaseio.com"
     };
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // Generate unique local runtime profile signature
-    let mySessionUid = "user_" + Math.random().toString(36).substring(2, 9);
+    // Generate (or reuse) a persistent local profile signature so refreshing
+    // the page doesn't spawn a brand new presence entry every time.
+    function getOrCreatePersistentUid() {
+        let storedUid = localStorage.getItem("cowmilk_session_uid");
+        if (!storedUid) {
+            storedUid = "user_" + Math.random().toString(36).substring(2, 9);
+            localStorage.setItem("cowmilk_session_uid", storedUid);
+        }
+        return storedUid;
+    }
+    let mySessionUid = getOrCreatePersistentUid();
     
     let currentUser = { username: "Cowmilk", avatarUrl: "", status: "🎮 ROBLOX" };
     let currentChannel = "welcome-and-rules";
     let currentLiveListener = null;
-    let currentChannelMetaListener = null;
     
     let activeReplyTargetId = null;
     let messageToForwardData = null;
     let localMuteRegistry = {};
+
+    // Usernames (lowercase) allowed to run admin commands like !purge and !mute.
+    // Edit this list to whoever should have admin powers in your server.
+    const ADMIN_USERNAMES = ["cowmilk"];
 
     const EMOJI_SHORTCODES = {
         ":sob:": "😭", ":smile:": "😀", ":joy:": "😂", ":fire:": "🔥", ":eyes:": "👀", ":100:": "💯", ":milk:": "🥛"
@@ -54,7 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const emojiMenuBtn = document.getElementById("emojiMenuBtn");
     const emojiPickerTray = document.getElementById("emojiPickerTray");
 
-    // --- 3. THE PRESENCE HEARTBEAT SYSTEM (ONLINE/OFFLINE DETECTOR) ---
+    // --- 3. THE PRESENCE HEARTBEAT SYSTEM ---
     function initializeUserPresence() {
         const myPresenceRef = database.ref(`presence/${mySessionUid}`);
         const connectedRef = database.ref(".info/connected");
@@ -65,7 +77,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     state: "offline"
                 });
                 
-                // Assert profile properties securely
                 myPresenceRef.set({
                     username: currentUser.username,
                     avatarUrl: currentUser.avatarUrl,
@@ -76,7 +87,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Initialize global directories immediately on page load to prevent UI deadlocks
+    // Monitor users online status directory
     database.ref("presence").on("value", (snapshot) => {
         syncGlobalPresenceDirectory(snapshot.val());
     });
@@ -86,6 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     function syncGlobalPresenceDirectory(presenceData) {
+        if (!membersContainerList) return;
         membersContainerList.innerHTML = "";
         
         let onlineUsers = [];
@@ -137,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isUserMuted = localMuteRegistry[user.username.toLowerCase()] ? " (MUTED)" : "";
         
         let avatarHTML = (user.avatarUrl && user.avatarUrl !== "")
-            ? `<img class="member-avatar-img" src="${user.avatarUrl}">`
+            ? `<img class="member-avatar-img" src="${escapeHTML(user.avatarUrl)}">`
             : `<div class="member-avatar-fallback" style="background-color: #5865f2;">${user.username.charAt(0).toUpperCase()}</div>`;
 
         card.innerHTML = `
@@ -153,7 +165,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return card;
     }
 
-    // --- 4. CHANNEL PERMISSIONS MANAGEMENT ENGINE ---
+    // --- 4. CHANNEL MANAGEMENT ENGINE ---
     function initializeChannelMetadataManager() {
         const channelsMetaRef = database.ref("serverMetadata/channels");
 
@@ -169,7 +181,8 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        currentChannelMetaListener = channelsMetaRef.on("value", (snapshot) => {
+        channelsMetaRef.on("value", (snapshot) => {
+            if (!dynamicChannelContainerRail) return;
             dynamicChannelContainerRail.innerHTML = "";
             if (!snapshot.exists()) return;
 
@@ -191,11 +204,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 chElement.addEventListener("click", () => {
                     if (currentChannel === chKey) return;
                     currentChannel = chKey;
-                    channelHeaderTitle.textContent = chKey;
-                    chatInput.placeholder = `Message #${chKey}`;
-                    appContainer.classList.remove("menu-open");
+                    if (channelHeaderTitle) channelHeaderTitle.textContent = chKey;
+                    if (chatInput) chatInput.placeholder = `Message #${chKey}`;
+                    appContainer?.classList.remove("menu-open");
                     activeReplyTargetId = null;
-                    replyPreviewBar.style.display = "none";
+                    if (replyPreviewBar) replyPreviewBar.style.display = "none";
                     
                     document.querySelector(".channel.active")?.classList.remove("active");
                     chElement.classList.add("active");
@@ -220,51 +233,55 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    createNewChannelActionBtn.addEventListener("click", () => {
-        const rawName = prompt("Enter name for new text channel:");
-        if (!rawName) return;
-        const processedChannelName = rawName.toLowerCase().replace(/[^a-z0-9-_]/g, "-");
-        if (processedChannelName.trim() === "") return alert("Invalid channel layout naming.");
-        
-        database.ref(`serverMetadata/channels/${processedChannelName}`).set(true);
-    });
+    if (createNewChannelActionBtn) {
+        createNewChannelActionBtn.addEventListener("click", () => {
+            const rawName = prompt("Enter name for new text channel:");
+            if (!rawName) return;
+            const processedChannelName = rawName.toLowerCase().replace(/[^a-z0-9-_]/g, "-");
+            if (processedChannelName.trim() === "") return alert("Invalid channel layout naming.");
+            
+            database.ref(`serverMetadata/channels/${processedChannelName}`).set(true);
+        });
+    }
 
-    // --- 5. PROFILE SCREEN INITIALIZATION SUBMIT ---
-    confirmProfileBtn.addEventListener("click", () => {
-        const enteredName = modalUsernameInput.value.trim();
-        const enteredAvatar = modalAvatarInput.value.trim();
-        const enteredStatus = modalStatusInput.value.trim();
+    // --- 5. PROFILE SCREEN INITIALIZATION ---
+    if (confirmProfileBtn) {
+        confirmProfileBtn.addEventListener("click", () => {
+            const enteredName = modalUsernameInput?.value.trim() || "Cowmilk";
+            const enteredAvatar = modalAvatarInput?.value.trim() || "";
+            const enteredStatus = modalStatusInput?.value.trim() || "🎮 ROBLOX";
 
-        if(enteredName === "") return alert("Username cannot be blank.");
+            if(enteredName === "") return alert("Username cannot be blank.");
 
-        currentUser.username = enteredName;
-        currentUser.avatarUrl = enteredAvatar;
-        currentUser.status = enteredStatus;
+            currentUser.username = enteredName;
+            currentUser.avatarUrl = enteredAvatar;
+            currentUser.status = enteredStatus;
 
-        const imgAvatar = document.getElementById("globalUserAvatar");
-        const placeholderAvatar = document.getElementById("globalUserAvatarPlaceholder");
-        
-        if (currentUser.avatarUrl !== "") {
-            imgAvatar.src = currentUser.avatarUrl;
-            imgAvatar.style.display = "block";
-            placeholderAvatar.style.display = "none";
-        } else {
-            placeholderAvatar.textContent = currentUser.username.charAt(0).toUpperCase();
-            placeholderAvatar.style.display = "flex";
-            imgAvatar.style.display = "none";
-        }
+            const imgAvatar = document.getElementById("globalUserAvatar");
+            const placeholderAvatar = document.getElementById("globalUserAvatarPlaceholder");
+            
+            if (currentUser.avatarUrl !== "" && imgAvatar) {
+                imgAvatar.src = currentUser.avatarUrl;
+                imgAvatar.style.display = "block";
+                if (placeholderAvatar) placeholderAvatar.style.display = "none";
+            } else if (placeholderAvatar) {
+                placeholderAvatar.textContent = currentUser.username.charAt(0).toUpperCase();
+                placeholderAvatar.style.display = "flex";
+                if (imgAvatar) imgAvatar.style.display = "none";
+            }
 
-        document.getElementById("globalUsername").textContent = currentUser.username;
-        document.getElementById("globalUserStatus").textContent = currentUser.status;
+            const globalUserEl = document.getElementById("globalUsername");
+            const globalStatusEl = document.getElementById("globalUserStatus");
+            if (globalUserEl) globalUserEl.textContent = currentUser.username;
+            if (globalStatusEl) globalStatusEl.textContent = currentUser.status;
 
-        // Hide overlay safely
-        identityModal.style.display = "none";
-        
-        // Connect user presence tracking
-        initializeUserPresence();
-    });
+            if (identityModal) identityModal.style.display = "none";
+            
+            initializeUserPresence();
+        });
+    }
 
-    // Initialize core structural frameworks immediately to prevent lockups
+    // Fire data synchronization on initial engine spin-up
     initializeChannelMetadataManager();
     syncChannelMessages(currentChannel);
 
@@ -276,49 +293,59 @@ document.addEventListener("DOMContentLoaded", () => {
         return processedText;
     }
 
-    // --- 6. ATTACH IMAGE LOCAL DATA LOADER ---
-    imageAttachmentFileInput.addEventListener("change", (e) => {
-        if (localMuteRegistry[currentUser.username.toLowerCase()]) {
-            alert("You are muted and cannot send files.");
-            return;
-        }
-        const file = e.target.files[0];
-        if (!file || !file.type.startsWith("image/")) return;
+    // --- 6. ATTACH IMAGE DATA LOADER ---
+    if (imageAttachmentFileInput) {
+        imageAttachmentFileInput.addEventListener("change", (e) => {
+            if (localMuteRegistry[currentUser.username.toLowerCase()]) {
+                alert("You are muted and cannot send files.");
+                return;
+            }
+            const file = e.target.files[0];
+            if (!file || !file.type.startsWith("image/")) return;
 
-        const fileReader = new FileReader();
-        fileReader.onload = () => {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const fileReader = new FileReader();
+            fileReader.onload = () => {
+                const now = new Date();
+                const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            database.ref(`channels/${currentChannel}`).push({
-                username: currentUser.username,
-                avatarUrl: currentUser.avatarUrl,
-                time: `Today at ${timeString}`,
-                text: "", 
-                imageUrl: fileReader.result, 
-                edited: false
-            });
-            imageAttachmentFileInput.value = "";
-        };
-        fileReader.readAsDataURL(file);
-    });
+                database.ref(`channels/${currentChannel}`).push({
+                    username: currentUser.username,
+                    avatarUrl: currentUser.avatarUrl,
+                    time: `Today at ${timeString}`,
+                    text: "", 
+                    imageUrl: fileReader.result, 
+                    edited: false
+                });
+                imageAttachmentFileInput.value = "";
+            };
+            fileReader.readAsDataURL(file);
+        });
+    }
 
     // --- 7. INTERFACE EVENT LISTENERS ---
-    emojiMenuBtn.addEventListener("click", (e) => { e.stopPropagation(); emojiPickerTray.classList.toggle("active"); });
+    if (emojiMenuBtn) {
+        emojiMenuBtn.addEventListener("click", (e) => { 
+            e.stopPropagation(); 
+            emojiPickerTray?.classList.toggle("active"); 
+        });
+    }
     document.querySelectorAll(".emoji-picker-tray span").forEach(emojiSpan => {
         emojiSpan.addEventListener("click", () => {
-            chatInput.value += emojiSpan.textContent;
-            chatInput.focus();
+            if (chatInput) {
+                chatInput.value += emojiSpan.textContent;
+                chatInput.focus();
+            }
         });
     });
-    document.addEventListener("click", () => emojiPickerTray.classList.remove("active"));
-    cancelReplyBtn.addEventListener("click", () => { activeReplyTargetId = null; replyPreviewBar.style.display = "none"; });
-    closeForwardModalBtn.addEventListener("click", () => { forwardModal.style.display = "none"; messageToForwardData = null; });
-    menuToggleBtn.addEventListener("click", () => appContainer.classList.add("menu-open"));
-    menuOverlay.addEventListener("click", () => appContainer.classList.remove("menu-open"));
+    document.addEventListener("click", () => emojiPickerTray?.classList.remove("active"));
+    cancelReplyBtn?.addEventListener("click", () => { activeReplyTargetId = null; if (replyPreviewBar) replyPreviewBar.style.display = "none"; });
+    closeForwardModalBtn?.addEventListener("click", () => { if (forwardModal) forwardModal.style.display = "none"; messageToForwardData = null; });
+    menuToggleBtn?.addEventListener("click", () => appContainer?.classList.add("menu-open"));
+    menuOverlay?.addEventListener("click", () => appContainer?.classList.remove("menu-open"));
 
-    // --- 8. MESSAGE RENDERING COMPONENT GENERATION ---
+    // --- 8. MESSAGE RENDERING ---
     function renderMessages(channelKey, snapshot) {
+        if (!chatMessagesContainer) return;
         chatMessagesContainer.innerHTML = "";
         if (!snapshot.exists()) return;
 
@@ -339,10 +366,10 @@ document.addEventListener("DOMContentLoaded", () => {
             const isSystemNotice = msg.systemNotice === true;
             const editedBadgeHTML = msg.edited ? `<span class="msg-edited-tag">(edited)</span>` : '';
             const forwardedBadgeHTML = msg.forwarded ? `<span class="msg-forwarded-tag">Forwarded</span>` : '';
-            let mediaEmbedHTML = msg.imageUrl ? `<img src="${msg.imageUrl}" class="msg-image-embed">` : '';
+            let mediaEmbedHTML = msg.imageUrl ? `<img src="${escapeHTML(msg.imageUrl)}" class="msg-image-embed">` : '';
 
             let userAvatarHTML = msg.avatarUrl && msg.avatarUrl !== "" 
-                ? `<img class="message-avatar" src="${msg.avatarUrl}">` 
+                ? `<img class="message-avatar" src="${escapeHTML(msg.avatarUrl)}">` 
                 : `<div class="message-avatar" style="background-color:#5865f2; display:flex; align-items:center; justify-content:center; font-weight:bold; color:white; font-size:16px;">${msg.username.charAt(0).toUpperCase()}</div>`;
 
             const modifyToolsHTML = (!isBot && !isSystemNotice) ? `
@@ -376,10 +403,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
             messageWrapper.querySelector(".reply-btn").addEventListener("click", () => {
                 activeReplyTargetId = msgId;
-                replyTargetUsername.textContent = msg.username;
-                replyTargetSnippet.textContent = msg.text ? msg.text : "Attachment File";
-                replyPreviewBar.style.display = "flex";
-                chatInput.focus();
+                if (replyTargetUsername) replyTargetUsername.textContent = msg.username;
+                if (replyTargetSnippet) replyTargetSnippet.textContent = msg.text ? msg.text : "Attachment File";
+                if (replyPreviewBar) replyPreviewBar.style.display = "flex";
+                chatInput?.focus();
             });
 
             messageWrapper.querySelector(".forward-btn").addEventListener("click", () => {
@@ -406,8 +433,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function openForwardTargetSelectionDialog() {
+        if (!forwardChannelListContainer) return;
         forwardChannelListContainer.innerHTML = "";
-        forwardModal.style.display = "flex";
+        if (forwardModal) forwardModal.style.display = "flex";
 
         database.ref("serverMetadata/channels").once("value", (snapshot) => {
             snapshot.forEach(childCh => {
@@ -429,7 +457,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 imageUrl: messageToForwardData.imageUrl || "",
                                 forwarded: true, edited: false
                             });
-                            forwardModal.style.display = "none";
+                            if (forwardModal) forwardModal.style.display = "none";
                             messageToForwardData = null;
                             alert(`Message forwarded to #${chName}`);
                         }
@@ -447,10 +475,17 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- 9. ADMINISTRATIVE RULES ENGINE (PURGE & MUTE COMMAND SYSTEM) ---
+    // --- 9. ADMINISTRATIVE COMMAND SYSTEM ---
     function handleAdminCommands(inputText) {
         const parts = inputText.trim().split(" ");
         const command = parts[0].toLowerCase();
+
+        if (command === "!purge" || command === "!mute") {
+            if (!ADMIN_USERNAMES.includes(currentUser.username.toLowerCase())) {
+                postSystemMessage(`⛔ Access Denied: @${currentUser.username} does not have permission to run **${command}**.`);
+                return true;
+            }
+        }
 
         if (command === "!purge") {
             const amount = parseInt(parts[1], 10);
@@ -506,53 +541,55 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // --- 10. TEXT MESSAGE INPUT TRANSFERS ---
-    chatInput.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" && chatInput.value.trim() !== "") {
-            let rawInputText = chatInput.value.trim();
+    // --- 10. TEXT MESSAGE INPUT ---
+    if (chatInput) {
+        chatInput.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" && chatInput.value.trim() !== "") {
+                let rawInputText = chatInput.value.trim();
 
-            const wasCommand = handleAdminCommands(rawInputText);
-            if (wasCommand) {
-                chatInput.value = "";
-                return;
-            }
+                const wasCommand = handleAdminCommands(rawInputText);
+                if (wasCommand) {
+                    chatInput.value = "";
+                    return;
+                }
 
-            if (localMuteRegistry[currentUser.username.toLowerCase()]) {
-                alert("Mute lock detected. You are restricted from broadcasting to this server channel.");
-                chatInput.value = "";
-                return;
-            }
+                if (localMuteRegistry[currentUser.username.toLowerCase()]) {
+                    alert("Mute lock detected. You are restricted from broadcasting to this server channel.");
+                    chatInput.value = "";
+                    return;
+                }
 
-            let messageText = parseShortcodes(rawInputText);
-            const now = new Date();
-            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                let messageText = parseShortcodes(rawInputText);
+                const now = new Date();
+                const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-            let outboundPayload = {
-                username: currentUser.username,
-                avatarUrl: currentUser.avatarUrl,
-                time: `Today at ${timeString}`,
-                text: messageText,
-                edited: false
-            };
-
-            if (activeReplyTargetId) {
-                outboundPayload.replyTo = {
-                    username: replyTargetUsername.textContent,
-                    snippet: replyTargetSnippet.textContent.substring(0, 40)
+                let outboundPayload = {
+                    username: currentUser.username,
+                    avatarUrl: currentUser.avatarUrl,
+                    time: `Today at ${timeString}`,
+                    text: messageText,
+                    edited: false
                 };
+
+                if (activeReplyTargetId && replyTargetUsername && replyTargetSnippet) {
+                    outboundPayload.replyTo = {
+                        username: replyTargetUsername.textContent,
+                        snippet: replyTargetSnippet.textContent.substring(0, 40)
+                    };
+                }
+
+                database.ref(`channels/${currentChannel}`).push(outboundPayload);
+
+                chatInput.value = "";
+                activeReplyTargetId = null;
+                if (replyPreviewBar) replyPreviewBar.style.display = "none";
+
+                if (currentChannel === "ai-bot-test") triggerSmartBotResponse(messageText);
             }
+        });
+    }
 
-            database.ref(`channels/${currentChannel}`).push(outboundPayload);
-
-            chatInput.value = "";
-            activeReplyTargetId = null;
-            replyPreviewBar.style.display = "none";
-
-            if (currentChannel === "ai-bot-test") triggerSmartBotResponse(messageText);
-        }
-    });
-
-    // --- 11. AI SIMULATOR DISPATCH ---
+    // --- 11. AI SIMULATOR ---
     function triggerSmartBotResponse(userPrompt) {
         setTimeout(() => {
             const now = new Date();
