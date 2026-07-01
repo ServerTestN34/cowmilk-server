@@ -18,6 +18,10 @@ document.addEventListener("DOMContentLoaded", () => {
         return storedUid;
     }
     let mySessionUid = getOrCreatePersistentUid();
+
+    // Marks when this tab loaded, so it only speaks TTS broadcasts that happen
+    // AFTER it connected (not ones already sitting in the database from earlier).
+    const sessionTtsStartTime = Date.now();
     
     let currentUser = { username: "Cowmilk", avatarUrl: "", status: "🎮 ROBLOX" };
     let currentChannel = "welcome-and-rules";
@@ -79,6 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const messageSearchInput = document.getElementById("messageSearchInput");
     const typingIndicatorBar = document.getElementById("typingIndicatorBar");
+    const ttsMuteToggleBtn = document.getElementById("ttsMuteToggleBtn");
 
     const openAdminPanelBtn = document.getElementById("openAdminPanelBtn");
     const adminPanelModal = document.getElementById("adminPanelModal");
@@ -282,6 +287,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     
                     syncChannelMessages(currentChannel);
                     renderTypingIndicator();
+                    attachTtsListenerForChannel(currentChannel);
                 });
 
                 chElement.querySelector(".delete-channel-trash").addEventListener("click", (e) => {
@@ -580,6 +586,63 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    // --- 7b2. TEXT-TO-SPEECH BROADCAST SYSTEM ---
+    // Listens for !tts broadcasts on the currently open channel and speaks
+    // them aloud using the browser's built-in speech synthesis, for anyone
+    // who currently has that channel open.
+    let ttsSpeechQueue = [];
+    let isSpeakingTts = false;
+    let currentTtsChannelListenerRef = null;
+    let isTtsMutedLocally = localStorage.getItem("cowmilk_tts_muted") === "true";
+
+    function updateTtsMuteButtonUI() {
+        if (!ttsMuteToggleBtn) return;
+        ttsMuteToggleBtn.textContent = isTtsMutedLocally ? "🔇" : "🔊";
+        ttsMuteToggleBtn.classList.toggle("muted", isTtsMutedLocally);
+        ttsMuteToggleBtn.title = isTtsMutedLocally
+            ? "TTS broadcasts muted for you — click to unmute"
+            : "Mute incoming TTS broadcasts for me";
+    }
+    updateTtsMuteButtonUI();
+
+    ttsMuteToggleBtn?.addEventListener("click", () => {
+        isTtsMutedLocally = !isTtsMutedLocally;
+        localStorage.setItem("cowmilk_tts_muted", String(isTtsMutedLocally));
+        updateTtsMuteButtonUI();
+        if (isTtsMutedLocally) {
+            ttsSpeechQueue = [];
+            window.speechSynthesis?.cancel();
+            isSpeakingTts = false;
+        }
+    });
+
+    function speakNextInTtsQueue() {
+        if (isSpeakingTts || ttsSpeechQueue.length === 0) return;
+        if (!window.speechSynthesis) { ttsSpeechQueue = []; return; }
+
+        isSpeakingTts = true;
+        const next = ttsSpeechQueue.shift();
+        const utterance = new SpeechSynthesisUtterance(`${next.username} says: ${next.text}`);
+        utterance.rate = 1;
+        utterance.onend = () => { isSpeakingTts = false; speakNextInTtsQueue(); };
+        utterance.onerror = () => { isSpeakingTts = false; speakNextInTtsQueue(); };
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function attachTtsListenerForChannel(channelKey) {
+        if (currentTtsChannelListenerRef) currentTtsChannelListenerRef.off();
+        currentTtsChannelListenerRef = database.ref(`ttsBroadcast/${channelKey}`);
+
+        currentTtsChannelListenerRef.limitToLast(1).on("child_added", (snapshot) => {
+            if (isTtsMutedLocally) return;
+            const entry = snapshot.val();
+            if (!entry || entry.ts < sessionTtsStartTime) return; // ignore old/stale broadcasts on load
+            ttsSpeechQueue.push(entry);
+            speakNextInTtsQueue();
+        });
+    }
+    attachTtsListenerForChannel(currentChannel);
+
     // --- 7c. UNREAD CHANNEL TRACKING ---
     function getLastReadTimestamp(channelKey) {
         return parseInt(localStorage.getItem(`cowmilk_lastRead_${channelKey}`) || "0", 10);
@@ -653,6 +716,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const isSystemNotice = msg.systemNotice === true;
             const editedBadgeHTML = msg.edited ? `<span class="msg-edited-tag">(edited)</span>` : '';
             const forwardedBadgeHTML = msg.forwarded ? `<span class="msg-forwarded-tag">Forwarded</span>` : '';
+            const ttsBadgeHTML = msg.ttsMessage ? `<span class="msg-tts-tag">🔊 Spoken aloud</span>` : '';
             let mediaEmbedHTML = msg.imageUrl ? `<img src="${escapeHTML(msg.imageUrl)}" class="msg-image-embed">` : '';
 
             const mentionsMe = !isSystemNotice && msg.text &&
@@ -694,7 +758,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="message-content">
                         <div class="message-meta">
                             <span class="msg-username">${escapeHTML(msg.username)}</span>
-                            <span class="msg-timestamp">${msg.time} ${editedBadgeHTML} ${forwardedBadgeHTML}</span>
+                            <span class="msg-timestamp">${msg.time} ${editedBadgeHTML} ${forwardedBadgeHTML} ${ttsBadgeHTML}</span>
                         </div>
                         ${contentBodyHTML}
                         ${mediaEmbedHTML}
@@ -879,6 +943,45 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             return true;
         }
+        if (command === "!tts") {
+            const spokenText = parts.slice(1).join(" ").trim();
+            if (spokenText === "") {
+                postSystemMessage(`⚠️ Usage instruction error: Type **!tts your message here** to broadcast it aloud to everyone currently in this channel.`);
+                return true;
+            }
+            if (spokenText.length > 300) {
+                postSystemMessage(`⚠️ TTS messages are capped at 300 characters to keep broadcasts short.`);
+                return true;
+            }
+            if (localMuteRegistry[currentUser.username.toLowerCase()]) {
+                postSystemMessage(`⛔ @${currentUser.username} is muted and cannot broadcast TTS.`);
+                return true;
+            }
+
+            const now = new Date();
+            const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            // Post it as a normal chat message so there's a visible record...
+            database.ref(`channels/${currentChannel}`).push({
+                username: currentUser.username,
+                avatarUrl: currentUser.avatarUrl,
+                time: `Today at ${timeString}`,
+                timestamp: Date.now(),
+                text: `🔊 ${spokenText}`,
+                ttsMessage: true,
+                edited: false
+            });
+
+            // ...and push a broadcast event that every connected client speaks aloud.
+            database.ref(`ttsBroadcast/${currentChannel}`).push({
+                text: spokenText,
+                username: currentUser.username,
+                ts: Date.now()
+            });
+
+            return true;
+        }
+
         return false;
     }
 

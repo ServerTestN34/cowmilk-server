@@ -996,3 +996,28 @@ body, html {
 @media (max-width: 768px) {
     .search-input { width: 120px; }
 }
+
+/* --- TEXT-TO-SPEECH ELEMENTS --- */
+.msg-tts-tag {
+    font-size: 10px;
+    color: #23a55a;
+    font-weight: bold;
+    margin-left: 4px;
+}
+
+.tts-mute-toggle-btn {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    margin-right: 4px;
+    opacity: 0.9;
+}
+
+.tts-mute-toggle-btn:hover {
+    opacity: 1;
+}
+
+.tts-mute-toggle-btn.muted {
+    opacity: 0.4;
+}
